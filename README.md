@@ -79,6 +79,12 @@ Decrypt token:
 whisperstash decrypt --token "<TOKEN>"
 ```
 
+Clipboard helpers:
+```bash
+whisperstash encrypt --from-clipboard --copy
+whisperstash decrypt --from-clipboard --copy
+```
+
 Set a default key once (used automatically by encrypt/decrypt/wrap/unwrap/view/edit/server):
 ```bash
 whisperstash key set

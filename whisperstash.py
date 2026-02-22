@@ -246,44 +246,72 @@ def unwrap_text(passphrase: str, text: str) -> str:
 
 def cmd_encrypt(args: argparse.Namespace) -> int:
     key = read_key(args.key)
-    text = args.text if args.text is not None else _read_text_with_prompt(
-        args.in_file,
-        "Please enter what you'd like to encrypt.",
-        multiline=True,
-    )
-    print(encrypt_text(key, text, integrity=args.integrity))
+    if args.from_clipboard:
+        text = _read_clipboard_text()
+    else:
+        text = args.text if args.text is not None else _read_text_with_prompt(
+            args.in_file,
+            "Please enter what you'd like to encrypt.",
+            multiline=True,
+        )
+    token = encrypt_text(key, text, integrity=args.integrity)
+    print(token)
+    if args.copy:
+        _write_clipboard_text(token)
+        print("Copied result to clipboard.")
     return 0
 
 
 def cmd_decrypt(args: argparse.Namespace) -> int:
     key = read_key(args.key)
-    token = args.token if args.token is not None else _read_text_with_prompt(
-        args.in_file,
-        "Please enter the token you'd like to decrypt (type /exit to cancel): ",
-    ).strip()
-    print(decrypt_text(key, token))
+    if args.from_clipboard:
+        token = _read_clipboard_text().strip()
+    else:
+        token = args.token if args.token is not None else _read_text_with_prompt(
+            args.in_file,
+            "Please enter the token you'd like to decrypt",
+        ).strip()
+    plain = decrypt_text(key, token)
+    print(plain)
+    if args.copy:
+        _write_clipboard_text(plain)
+        print("Copied result to clipboard.")
     return 0
 
 
 def cmd_wrap(args: argparse.Namespace) -> int:
     key = read_key(args.key)
-    text = args.text if args.text is not None else _read_text_with_prompt(
-        args.in_file,
-        "Please enter what you'd like to wrap.",
-        multiline=True,
-    )
-    print(wrap_text(key, text, integrity=args.integrity))
+    if args.from_clipboard:
+        text = _read_clipboard_text()
+    else:
+        text = args.text if args.text is not None else _read_text_with_prompt(
+            args.in_file,
+            "Please enter what you'd like to wrap.",
+            multiline=True,
+        )
+    wrapped = wrap_text(key, text, integrity=args.integrity)
+    print(wrapped)
+    if args.copy:
+        _write_clipboard_text(wrapped)
+        print("Copied result to clipboard.")
     return 0
 
 
 def cmd_unwrap(args: argparse.Namespace) -> int:
     key = read_key(args.key)
-    text = args.text if args.text is not None else _read_text_with_prompt(
-        args.in_file,
-        "Please enter text containing ENC[...] to unwrap.",
-        multiline=True,
-    )
-    print(unwrap_text(key, text))
+    if args.from_clipboard:
+        text = _read_clipboard_text()
+    else:
+        text = args.text if args.text is not None else _read_text_with_prompt(
+            args.in_file,
+            "Please enter text containing ENC[...] to unwrap.",
+            multiline=True,
+        )
+    unwrapped = unwrap_text(key, text)
+    print(unwrapped)
+    if args.copy:
+        _write_clipboard_text(unwrapped)
+        print("Copied result to clipboard.")
     return 0
 
 
@@ -493,6 +521,47 @@ def _read_text_with_prompt(in_file: str | None, prompt: str, multiline: bool = F
     return value
 
 
+def _read_clipboard_text() -> str:
+    if sys.platform == "win32":
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "Get-Clipboard -Raw"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.returncode == 0:
+            value = proc.stdout
+            if value:
+                return value
+        raise ValueError("Unable to read clipboard via PowerShell.")
+
+    for cmd in (["pbpaste"], ["xclip", "-selection", "clipboard", "-o"], ["xsel", "--clipboard", "--output"]):
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if proc.returncode == 0 and proc.stdout:
+            return proc.stdout
+    raise ValueError("Unable to read clipboard (supported tools: pbpaste/xclip/xsel).")
+
+
+def _write_clipboard_text(value: str) -> None:
+    if sys.platform == "win32":
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "Set-Clipboard"],
+            input=value,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            raise ValueError("Unable to write clipboard via PowerShell.")
+        return
+
+    for cmd in (["pbcopy"], ["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]):
+        proc = subprocess.run(cmd, input=value, text=True, capture_output=True, check=False)
+        if proc.returncode == 0:
+            return
+    raise ValueError("Unable to write clipboard (supported tools: pbcopy/xclip/xsel).")
+
+
 def _default_enc_output_path(in_file: str) -> str:
     root, _ = os.path.splitext(in_file)
     if not root:
@@ -513,6 +582,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("encrypt", help="Encrypt text to token")
     p.add_argument("--text", help="Plain text")
     p.add_argument("--in-file", help="Read plain text from file")
+    p.add_argument("--from-clipboard", action="store_true", help="Read plain text from clipboard")
+    p.add_argument("--copy", action="store_true", help="Copy resulting token to clipboard")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
     p.add_argument("--integrity", action="store_true", help="Use NC2 token format with HMAC integrity check")
     p.set_defaults(func=cmd_encrypt)
@@ -520,12 +591,16 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("decrypt", help="Decrypt token to plain text")
     p.add_argument("--token", help="Encrypted token")
     p.add_argument("--in-file", help="Read token from file")
+    p.add_argument("--from-clipboard", action="store_true", help="Read token from clipboard")
+    p.add_argument("--copy", action="store_true", help="Copy resulting plain text to clipboard")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
     p.set_defaults(func=cmd_decrypt)
 
     p = sub.add_parser("wrap", help="Encrypt and wrap as ENC[...] ")
     p.add_argument("--text", help="Plain text")
     p.add_argument("--in-file", help="Read plain text from file")
+    p.add_argument("--from-clipboard", action="store_true", help="Read plain text from clipboard")
+    p.add_argument("--copy", action="store_true", help="Copy resulting wrapped text to clipboard")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
     p.add_argument("--integrity", action="store_true", help="Use NC2 token format with HMAC integrity check")
     p.set_defaults(func=cmd_wrap)
@@ -533,6 +608,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("unwrap", help="Decrypt all ENC[...] blocks in text")
     p.add_argument("--text", help="Input text containing ENC[...] blocks")
     p.add_argument("--in-file", help="Read input from file")
+    p.add_argument("--from-clipboard", action="store_true", help="Read input text from clipboard")
+    p.add_argument("--copy", action="store_true", help="Copy resulting unwrapped text to clipboard")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
     p.set_defaults(func=cmd_unwrap)
 
@@ -607,9 +684,13 @@ def main() -> int:
         if args.command in {"encrypt", "wrap", "unwrap"}:
             if args.text is not None and args.in_file is not None:
                 raise ValueError("Use only one of --text or --in-file")
+            if getattr(args, "from_clipboard", False) and (args.text is not None or args.in_file is not None):
+                raise ValueError("Use only one of --from-clipboard, --text, or --in-file")
         if args.command in {"decrypt"}:
             if args.token is not None and args.in_file is not None:
                 raise ValueError("Use only one of --token or --in-file")
+            if getattr(args, "from_clipboard", False) and (args.token is not None or args.in_file is not None):
+                raise ValueError("Use only one of --from-clipboard, --token, or --in-file")
 
         return args.func(args)
     except Exception as exc:
