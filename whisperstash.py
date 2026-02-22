@@ -16,6 +16,8 @@ import tempfile
 import ctypes
 import hashlib
 import fnmatch
+import urllib.request
+import urllib.error
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from cryptography.hazmat.primitives import hashes
@@ -538,6 +540,64 @@ def cmd_batch_decrypt(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_doctor(args: argparse.Namespace) -> int:
+    checks: list[tuple[str, bool, str]] = []
+
+    if sys.platform == "win32":
+        bin_dir = os.path.join(os.path.expanduser("~"), "bin")
+        launcher = os.path.join(bin_dir, "whisperstash.cmd")
+    else:
+        bin_dir = os.path.join(os.path.expanduser("~"), "bin")
+        launcher = os.path.join(bin_dir, "whisperstash")
+
+    checks.append(("launcher_exists", os.path.exists(launcher), launcher))
+    path_parts = [p.rstrip("\\/") for p in os.environ.get("PATH", "").split(os.pathsep) if p]
+    checks.append(("path_contains_bin", bin_dir.rstrip("\\/") in path_parts, bin_dir))
+
+    home = os.environ.get("WHISPERSTASH_HOME") or os.path.join(
+        os.environ.get("LOCALAPPDATA", ""), "whisperstash"
+    )
+    if not home or home == "whisperstash":
+        home = os.path.expanduser("~/.whisperstash")
+    py = os.path.join(home, ".venv", "Scripts" if sys.platform == "win32" else "bin", "python.exe" if sys.platform == "win32" else "python")
+    checks.append(("venv_python_exists", os.path.exists(py), py))
+
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8765/health", timeout=1.0) as resp:
+            ok = resp.status == 200
+            detail = f"status={resp.status}"
+    except Exception as exc:
+        ok = False
+        detail = str(exc)
+    checks.append(("daemon_health", ok, detail))
+
+    ext_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "whisperstash_chrome")
+    manifest_path = os.path.join(ext_dir, "manifest.json")
+    checks.append(("extension_manifest_exists", os.path.exists(manifest_path), manifest_path))
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+            perms = set(manifest.get("permissions", []))
+            unexpected = sorted(perms.intersection({"storage", "scripting"}))
+            checks.append(("extension_permissions_minimal", len(unexpected) == 0, f"unexpected={unexpected or 'none'}"))
+        except Exception as exc:
+            checks.append(("extension_permissions_minimal", False, str(exc)))
+
+    failures = 0
+    for name, ok, detail in checks:
+        status = "OK" if ok else "FAIL"
+        print(f"{status:4} {name}: {detail}")
+        if not ok:
+            failures += 1
+
+    if failures == 0:
+        print("Doctor: all checks passed.")
+        return 0
+    print(f"Doctor: {failures} check(s) failed.")
+    return 1
+
+
 def _read_file_text(path: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
@@ -742,6 +802,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_batch_dec.add_argument("--dry-run", action="store_true", help="Show planned operations without writing files")
     p_batch_dec.add_argument("--key", help="Passphrase (avoid shell history)")
     p_batch_dec.set_defaults(func=cmd_batch_decrypt)
+
+    p = sub.add_parser("doctor", help="Run installation and runtime diagnostics")
+    p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("key", help="Manage default key/passphrase")
     key_sub = p.add_subparsers(dest="key_command", required=True)

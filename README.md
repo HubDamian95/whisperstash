@@ -139,6 +139,11 @@ whisperstash batch encrypt --in-dir ./docs --out-dir ./docs_enc --include "*.txt
 whisperstash batch decrypt --in-dir ./docs_enc --out-dir ./docs_restored --include "*.enc"
 ```
 
+Installation/runtime diagnostics:
+```bash
+whisperstash doctor
+```
+
 ## 2) Start local daemon for browser integration
 ```bash
 whisperstash server
