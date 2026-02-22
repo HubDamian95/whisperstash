@@ -107,6 +107,15 @@ whisperstash file-encrypt --in-file photo.jpg --out-file photo.enc
 whisperstash file-encrypt
 ```
 
+Decrypt a `.enc` token file back to original bytes:
+```bash
+whisperstash file-decrypt --in-file photo.enc
+# optional output path:
+whisperstash file-decrypt --in-file photo.enc --out-file photo_restored.jpg
+# interactive prompt mode:
+whisperstash file-decrypt
+```
+
 ## 2) Start local daemon for browser integration
 ```bash
 whisperstash server

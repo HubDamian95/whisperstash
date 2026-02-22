@@ -337,6 +337,30 @@ def cmd_file_encrypt(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_file_decrypt(args: argparse.Namespace) -> int:
+    key = read_key(args.key)
+    in_file = args.in_file if args.in_file else input("Enter .enc file path to decrypt (type /exit to cancel): ").strip()
+    if in_file.lower() in {"/exit", "exit", "quit", "q"}:
+        raise ValueError("Cancelled.")
+    if not in_file:
+        raise ValueError("Input file path cannot be empty.")
+    if not os.path.isfile(in_file):
+        raise ValueError(f"Input file not found: {in_file}")
+
+    token = _read_file_text(in_file).strip()
+    b64_text = decrypt_text(key, token)
+    try:
+        data = base64.b64decode(b64_text.encode("ascii"), validate=True)
+    except (binascii.Error, UnicodeEncodeError) as exc:
+        raise ValueError(f"Decrypted token does not contain valid base64 file data: {exc}") from exc
+
+    out_file = args.out_file if args.out_file else _default_dec_output_path(in_file)
+    with open(out_file, "wb") as f:
+        f.write(data)
+    print(f"Wrote decrypted file to {out_file}")
+    return 0
+
+
 def _read_file_text(path: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
@@ -363,6 +387,12 @@ def _default_enc_output_path(in_file: str) -> str:
     if not root:
         return f"{in_file}.enc"
     return f"{root}.enc"
+
+
+def _default_dec_output_path(in_file: str) -> str:
+    if in_file.lower().endswith(".enc"):
+        return in_file[:-4]
+    return f"{in_file}.out"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -420,6 +450,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out-file", help="Output .enc file path (default: input with .enc extension)")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
     p.set_defaults(func=cmd_file_encrypt)
+
+    p = sub.add_parser("file-decrypt", help="Decrypt .enc token file and restore original file bytes")
+    p.add_argument("--in-file", help="Input .enc file path (if omitted, prompt interactively)")
+    p.add_argument("--out-file", help="Output file path (default: remove .enc suffix)")
+    p.add_argument("--key", help="Passphrase (avoid shell history)")
+    p.set_defaults(func=cmd_file_decrypt)
 
     p = sub.add_parser("key", help="Manage default key/passphrase")
     key_sub = p.add_subparsers(dest="key_command", required=True)
