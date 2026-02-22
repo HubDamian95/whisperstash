@@ -48,7 +48,8 @@ $PathParts = $UserPath.Split(';', [System.StringSplitOptions]::RemoveEmptyEntrie
 if (-not ($PathParts -contains $BinDirNorm)) {
     $NewPath = if ([string]::IsNullOrEmpty($UserPath)) { $BinDirNorm } else { "$UserPath;$BinDirNorm" }
     [Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
-    Write-Host "Added $BinDirNorm to user PATH. Open a new terminal to use whisperstash."
+    $env:Path = "$env:Path;$BinDirNorm"
+    Write-Host "Added $BinDirNorm to user PATH."
 }
 
 Write-Host ""

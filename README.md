@@ -63,6 +63,17 @@ Decrypt token:
 whisperstash decrypt --token "<TOKEN>"
 ```
 
+Set a default key once (used automatically by encrypt/decrypt/wrap/unwrap/view/edit/server):
+```bash
+whisperstash key set
+```
+
+Manage default key:
+```bash
+whisperstash key status
+whisperstash key clear
+```
+
 Unwrap text containing one or many `ENC[...]` blocks:
 ```bash
 whisperstash unwrap --text "my note ENC[...] and more"

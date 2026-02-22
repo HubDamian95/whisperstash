@@ -6,6 +6,7 @@ import base64
 import getpass
 import json
 import os
+import stat
 import re
 import subprocess
 import tempfile
@@ -20,6 +21,45 @@ SALT_LEN = 16
 NONCE_LEN = 12
 PBKDF2_ITERS = 250_000
 WRAP_RE = re.compile(r"ENC\[([A-Za-z0-9_\-=]+)\]")
+
+
+def _default_key_path() -> str:
+    base_dir = os.environ.get("WHISPERSTASH_HOME")
+    if base_dir:
+        return os.path.join(base_dir, ".default_key")
+    return os.path.expanduser("~/.whisperstash_default_key")
+
+
+def _read_default_key() -> str | None:
+    path = _default_key_path()
+    if not os.path.exists(path):
+        return None
+    with open(path, "r", encoding="utf-8") as f:
+        key = f.read().strip()
+    return key or None
+
+
+def _write_default_key(key: str) -> str:
+    path = _default_key_path()
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(key + "\n")
+    try:
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+    except OSError:
+        pass
+    return path
+
+
+def _clear_default_key() -> str:
+    path = _default_key_path()
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+    return path
 
 
 def derive_key(passphrase: str, salt: bytes) -> bytes:
@@ -63,10 +103,40 @@ def read_key(cli_key: str | None) -> str:
         if not cli_key:
             raise ValueError("Empty key is not allowed.")
         return cli_key
+    default_key = _read_default_key()
+    if default_key:
+        return default_key
     key = getpass.getpass("Enter key/passphrase: ")
     if not key:
         raise ValueError("Empty key is not allowed.")
     return key
+
+
+def cmd_key_set(args: argparse.Namespace) -> int:
+    if args.key is not None:
+        key = args.key
+    else:
+        key = getpass.getpass("Set default key/passphrase: ")
+    if not key:
+        raise ValueError("Empty key is not allowed.")
+    path = _write_default_key(key)
+    print(f"Default key saved: {path}")
+    return 0
+
+
+def cmd_key_clear(args: argparse.Namespace) -> int:
+    path = _clear_default_key()
+    print(f"Default key cleared: {path}")
+    return 0
+
+
+def cmd_key_status(args: argparse.Namespace) -> int:
+    path = _default_key_path()
+    if _read_default_key() is None:
+        print(f"No default key set ({path})")
+    else:
+        print(f"Default key is set ({path})")
+    return 0
 
 
 def wrap_text(passphrase: str, plaintext: str) -> str:
@@ -267,6 +337,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--port", type=int, default=8765, help="Port")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
     p.set_defaults(func=cmd_server)
+
+    p = sub.add_parser("key", help="Manage default key/passphrase")
+    key_sub = p.add_subparsers(dest="key_command", required=True)
+
+    p_key_set = key_sub.add_parser("set", help="Save default key")
+    p_key_set.add_argument("--key", help="Passphrase (avoid shell history)")
+    p_key_set.set_defaults(func=cmd_key_set)
+
+    p_key_clear = key_sub.add_parser("clear", help="Remove default key")
+    p_key_clear.set_defaults(func=cmd_key_clear)
+
+    p_key_status = key_sub.add_parser("status", help="Show default key status")
+    p_key_status.set_defaults(func=cmd_key_status)
 
     return parser
 
