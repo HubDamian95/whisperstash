@@ -48,11 +48,16 @@ $PathParts = $UserPath.Split(';', [System.StringSplitOptions]::RemoveEmptyEntrie
 if (-not ($PathParts -contains $BinDirNorm)) {
     $NewPath = if ([string]::IsNullOrEmpty($UserPath)) { $BinDirNorm } else { "$UserPath;$BinDirNorm" }
     [Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
-    $env:Path = "$env:Path;$BinDirNorm"
     Write-Host "Added $BinDirNorm to user PATH."
+}
+
+$SessionPathParts = $env:Path.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.TrimEnd('\') }
+if (-not ($SessionPathParts -contains $BinDirNorm)) {
+    $env:Path = "$env:Path;$BinDirNorm"
+    Write-Host "Updated PATH for current PowerShell session."
 }
 
 Write-Host ""
 Write-Host "Installed WhisperStash."
 Write-Host "Launcher: $Launcher"
-Write-Host "Run in a new terminal: whisperstash --help"
+Write-Host "Try now: whisperstash --help"
