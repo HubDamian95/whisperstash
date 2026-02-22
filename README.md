@@ -106,3 +106,7 @@ Then:
 - Do not hardcode your passphrase.
 - Prefer interactive key entry (no `--key`) to avoid shell history leakage.
 - Any decrypted page content becomes visible in the tab after replacement.
+
+## Privacy Policy
+- `PRIVACY.md`
+- Direct URL for Chrome Web Store field: `https://raw.githubusercontent.com/HubDamian95/whisperstash/main/PRIVACY.md`
