@@ -634,13 +634,15 @@ def _read_text_with_prompt(in_file: str | None, prompt: str, multiline: bool = F
             raise ValueError("Input cannot be empty.")
         return value
 
-    print(f"{prompt} Type EOF on a new line when finished (or /exit to cancel).")
+    print(f"{prompt} Type EOF or a blank line when finished (or /exit to cancel).")
     lines: list[str] = []
     while True:
         line = input()
         stripped = line.strip().lower()
         if stripped in {"/exit", "exit", "quit", "q"}:
             raise ValueError("Cancelled.")
+        if line == "" and lines:
+            break
         if line == "EOF":
             break
         lines.append(line)
@@ -723,6 +725,7 @@ def _run_interactive_mode(parser: argparse.ArgumentParser) -> int:
         if raw.lower() in {"help", "h", "?"}:
             parser.print_help()
             continue
+        raw = _expand_interactive_shortcuts(raw)
         try:
             args = parser.parse_args(shlex.split(raw))
         except SystemExit:
@@ -745,6 +748,24 @@ def _execute_args(args: argparse.Namespace) -> int:
             raise ValueError("Use only one of --from-clipboard, --token, or --in-file")
 
     return args.func(args)
+
+
+def _expand_interactive_shortcuts(raw: str) -> str:
+    parts = shlex.split(raw)
+    if not parts:
+        return raw
+    cmd = parts[0]
+    rest = parts[1:]
+    if not rest:
+        return raw
+    if any(p.startswith("-") for p in rest):
+        return raw
+
+    if cmd in {"encrypt", "wrap", "unwrap"}:
+        return f'{cmd} --text {shlex.quote(" ".join(rest))}'
+    if cmd == "decrypt":
+        return f'{cmd} --token {shlex.quote(" ".join(rest))}'
+    return raw
 
 
 def _iter_matched_files(in_dir: str, include: list[str], exclude: list[str]) -> list[tuple[str, str]]:
