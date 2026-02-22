@@ -19,7 +19,8 @@ No cloud backend. Your data stays on your machine.
 
  > Run: `whisperstash ui` for the UI in your local browser:
 
-<img width="1235" height="780" alt="image" src="https://github.com/user-attachments/assets/08d1683e-7f28-4a4a-8623-1b5a80c5057b" />
+<img width="1267" height="760" alt="image" src="https://github.com/user-attachments/assets/07b51831-b2a1-43a9-a065-14ec3c3262ff" />
+
 
 
 
