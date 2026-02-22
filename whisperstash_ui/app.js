@@ -28,6 +28,7 @@ const batchResultEl = document.getElementById('batchResult');
 const runDoctorBtn = document.getElementById('runDoctor');
 const runKeyStatusBtn = document.getElementById('runKeyStatus');
 const toolsResultEl = document.getElementById('toolsResult');
+const uiToken = window.__WS_UI_TOKEN__ || '';
 
 let timer = null;
 let requestSeq = 0;
@@ -47,7 +48,10 @@ function parsePatterns(text) {
 async function postJson(path, payload) {
   const res = await fetch(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-WhisperStash-UI-Token': uiToken
+    },
     body: JSON.stringify(payload || {})
   });
   const data = await res.json();

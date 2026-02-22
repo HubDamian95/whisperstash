@@ -23,6 +23,7 @@ import webbrowser
 import io
 from contextlib import redirect_stdout
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import secrets
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -483,6 +484,9 @@ def _transform_text(passphrase: str, text: str, mode: str, integrity: bool, auto
 
 def cmd_ui(args: argparse.Namespace) -> int:
     key = read_key(args.key)
+    ui_token = args.auth_token if args.auth_token else os.environ.get("WHISPERSTASH_UI_TOKEN")
+    if not ui_token:
+        ui_token = secrets.token_urlsafe(24)
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         base_dir = getattr(sys, "_MEIPASS")
     else:
@@ -494,44 +498,82 @@ def cmd_ui(args: argparse.Namespace) -> int:
         with open(path, "rb") as f:
             return f.read()
 
-    assets = {
-        "/": ("text/html; charset=utf-8", read_asset("index.html")),
-        "/index.html": ("text/html; charset=utf-8", read_asset("index.html")),
-        "/app.js": ("application/javascript; charset=utf-8", read_asset("app.js")),
-        "/styles.css": ("text/css; charset=utf-8", read_asset("styles.css")),
-    }
-
     class Handler(BaseHTTPRequestHandler):
         def _send_json(self, status: int, payload: dict) -> None:
             body = json.dumps(payload).encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
             self.end_headers()
             self.wfile.write(body)
 
-        def do_OPTIONS(self) -> None:
-            self._send_json(200, {"ok": True})
-
-        def do_GET(self) -> None:
-            if self.path == "/api/health":
-                self._send_json(200, {"ok": True, "service": "whisperstash-ui"})
-                return
-            asset = assets.get(self.path)
-            if asset is None:
-                self._send_json(404, {"ok": False, "error": "not found"})
-                return
-            content_type, body = asset
-            self.send_response(200)
+        def _send_text(self, status: int, content_type: str, text: str) -> None:
+            body = text.encode("utf-8")
+            self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
 
+        def _is_ui_authorized(self) -> bool:
+            header = self.headers.get("X-WhisperStash-UI-Token", "")
+            return hmac.compare_digest(header, ui_token)
+
+        def do_OPTIONS(self) -> None:
+            self.send_response(204)
+            self.send_header("Allow", "GET, POST, OPTIONS")
+            self.end_headers()
+
+        def do_GET(self) -> None:
+            if self.path == "/api/health":
+                if not self._is_ui_authorized():
+                    self._send_json(401, {"ok": False, "error": "unauthorized"})
+                    return
+                self._send_json(200, {"ok": True, "service": "whisperstash-ui"})
+                return
+            if self.path in {"/", "/index.html"}:
+                try:
+                    html = read_asset("index.html").decode("utf-8")
+                    html = html.replace("__WS_UI_TOKEN__", ui_token)
+                    self._send_text(200, "text/html; charset=utf-8", html)
+                except FileNotFoundError:
+                    self._send_text(
+                        500,
+                        "text/plain; charset=utf-8",
+                        f"UI assets missing: expected {os.path.join(ui_dir, 'index.html')}",
+                    )
+                return
+            if self.path == "/app.js":
+                try:
+                    body = read_asset("app.js")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/javascript; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                except FileNotFoundError:
+                    self._send_text(500, "text/plain; charset=utf-8", f"UI assets missing: expected {os.path.join(ui_dir, 'app.js')}")
+                return
+            if self.path == "/styles.css":
+                try:
+                    body = read_asset("styles.css")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/css; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                except FileNotFoundError:
+                    self._send_text(500, "text/plain; charset=utf-8", f"UI assets missing: expected {os.path.join(ui_dir, 'styles.css')}")
+                return
+            if self.path.startswith("/api/"):
+                self._send_json(404, {"ok": False, "error": "not found"})
+                return
+            self._send_text(404, "text/plain; charset=utf-8", "not found")
+
         def do_POST(self) -> None:
+            if not self._is_ui_authorized():
+                self._send_json(401, {"ok": False, "error": "unauthorized"})
+                return
             length = int(self.headers.get("Content-Length", "0"))
             raw = self.rfile.read(length) if length > 0 else b"{}"
             try:
@@ -672,6 +714,7 @@ def cmd_ui(args: argparse.Namespace) -> int:
     server = HTTPServer((args.host, args.port), Handler)
     url = f"http://{args.host}:{args.port}"
     print(f"whisperstash ui listening on {url}")
+    print("UI API access token is active for this session.")
     print("Press Ctrl+C to stop.")
     if not args.no_open:
         try:
@@ -1103,6 +1146,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host", default="127.0.0.1", help="Host bind address")
     p.add_argument("--port", type=int, default=8787, help="Port")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
+    p.add_argument("--auth-token", help="Optional fixed UI API token (default: random per session)")
     p.add_argument("--no-open", action="store_true", help="Do not auto-open browser")
     p.set_defaults(func=cmd_ui)
 

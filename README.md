@@ -215,6 +215,7 @@ whisperstash ui
 Optional flags:
 ```bash
 whisperstash ui --port 8787 --no-open
+whisperstash ui --auth-token "my-fixed-ui-token"
 ```
 
 UI features:
@@ -227,6 +228,7 @@ UI features:
 - Tabbed workflow `Files`: file-encrypt, file-decrypt, b64-to-enc
 - Tabbed workflow `Batch`: batch encrypt/decrypt with include/exclude and dry-run
 - Tabbed workflow `Tools`: doctor + key status
+- UI API endpoints are protected by a session token header (auto-generated unless `--auth-token` is provided)
 
 ## CLI command reference
 ```bash
