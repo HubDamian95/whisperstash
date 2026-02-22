@@ -523,14 +523,27 @@ def cmd_ui(args: argparse.Namespace) -> int:
             # Fallback: allow same-origin UI requests for this exact UI host/port.
             origin = self.headers.get("Origin", "")
             referer = self.headers.get("Referer", "")
+            host = self.headers.get("Host", "")
+            sec_fetch_site = self.headers.get("Sec-Fetch-Site", "")
+            client_ip = self.client_address[0] if self.client_address else ""
             allowed_origins = {
                 f"http://{args.host}:{args.port}",
                 f"http://127.0.0.1:{args.port}",
                 f"http://localhost:{args.port}",
             }
+            allowed_hosts = {
+                f"{args.host}:{args.port}",
+                f"127.0.0.1:{args.port}",
+                f"localhost:{args.port}",
+            }
+            is_loopback_client = client_ip in {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
+
             if origin in allowed_origins:
                 return True
             if any(referer.startswith(o + "/") or referer == o for o in allowed_origins):
+                return True
+            # Some browsers/privacy settings omit Origin/Referer on same-process localhost fetches.
+            if is_loopback_client and host in allowed_hosts and sec_fetch_site in {"same-origin", "none", ""}:
                 return True
             return False
 
