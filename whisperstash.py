@@ -316,6 +316,27 @@ def cmd_b64_to_enc(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_file_encrypt(args: argparse.Namespace) -> int:
+    key = read_key(args.key)
+    in_file = args.in_file if args.in_file else input("Enter file path to encrypt (type /exit to cancel): ").strip()
+    if in_file.lower() in {"/exit", "exit", "quit", "q"}:
+        raise ValueError("Cancelled.")
+    if not in_file:
+        raise ValueError("Input file path cannot be empty.")
+    if not os.path.isfile(in_file):
+        raise ValueError(f"Input file not found: {in_file}")
+
+    with open(in_file, "rb") as f:
+        data = f.read()
+    b64_text = base64.b64encode(data).decode("ascii")
+    token = encrypt_text(key, b64_text)
+
+    out_file = args.out_file if args.out_file else _default_enc_output_path(in_file)
+    _write_file_text(out_file, token + "\n")
+    print(f"Wrote encrypted file token to {out_file}")
+    return 0
+
+
 def _read_file_text(path: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
@@ -393,6 +414,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out-file", help="Output .enc file path (default: input with .enc extension)")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
     p.set_defaults(func=cmd_b64_to_enc)
+
+    p = sub.add_parser("file-encrypt", help="Base64-encode any file and encrypt into .enc token file")
+    p.add_argument("--in-file", help="Input file path (if omitted, prompt interactively)")
+    p.add_argument("--out-file", help="Output .enc file path (default: input with .enc extension)")
+    p.add_argument("--key", help="Passphrase (avoid shell history)")
+    p.set_defaults(func=cmd_file_encrypt)
 
     p = sub.add_parser("key", help="Manage default key/passphrase")
     key_sub = p.add_subparsers(dest="key_command", required=True)

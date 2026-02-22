@@ -98,6 +98,15 @@ whisperstash b64-to-enc --in-file secret.b64
 whisperstash b64-to-enc --in-file secret.b64 --out-file secret.enc
 ```
 
+Encrypt any file into a `.enc` token file (file bytes -> base64 -> encrypted token):
+```bash
+whisperstash file-encrypt --in-file photo.jpg
+# optional output path:
+whisperstash file-encrypt --in-file photo.jpg --out-file photo.enc
+# interactive prompt mode:
+whisperstash file-encrypt
+```
+
 ## 2) Start local daemon for browser integration
 ```bash
 whisperstash server
