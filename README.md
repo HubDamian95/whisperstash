@@ -66,6 +66,8 @@ Output:
 ```powershell
 dist/release/whisperstash-windows-x86_64.exe
 ```
+Notes:
+- Windows `.exe` icon is sourced from `Whisperstash_logo_small_128.png`.
 
 ## GitHub release flow
 
