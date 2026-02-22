@@ -1,5 +1,9 @@
 # WhisperStash
 
+When creating this toolkit, what I had in mind is that our data is constantly being scraped by AI. I wanted an easy tool that I can use with some sort of "key" that I can share with bunch of my family and friends such that only the people I share the key with will understand, and then we will be able to hide what we're talking about. This is specifically important as more governments around the world are issuing ID checks, social media bans and information sharing is becoming less and less possible for people around the world. 
+
+I appreciate that this tool can also be used for nefarious purposes, although I hope it won't be. Please stay safe out there. 
+
 Local-first encryption toolkit with:
 - CLI workflows for text and files
 - Local browser UI (`whisperstash ui`)
