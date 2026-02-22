@@ -153,28 +153,40 @@ def unwrap_text(passphrase: str, text: str) -> str:
 
 def cmd_encrypt(args: argparse.Namespace) -> int:
     key = read_key(args.key)
-    text = args.text if args.text is not None else _read_file_text(args.in_file)
+    text = args.text if args.text is not None else _read_text_with_prompt(
+        args.in_file,
+        "Please enter what you'd like to encrypt (type /exit to cancel): ",
+    )
     print(encrypt_text(key, text))
     return 0
 
 
 def cmd_decrypt(args: argparse.Namespace) -> int:
     key = read_key(args.key)
-    token = args.token if args.token is not None else _read_file_text(args.in_file).strip()
+    token = args.token if args.token is not None else _read_text_with_prompt(
+        args.in_file,
+        "Please enter the token you'd like to decrypt (type /exit to cancel): ",
+    ).strip()
     print(decrypt_text(key, token))
     return 0
 
 
 def cmd_wrap(args: argparse.Namespace) -> int:
     key = read_key(args.key)
-    text = args.text if args.text is not None else _read_file_text(args.in_file)
+    text = args.text if args.text is not None else _read_text_with_prompt(
+        args.in_file,
+        "Please enter what you'd like to wrap (type /exit to cancel): ",
+    )
     print(wrap_text(key, text))
     return 0
 
 
 def cmd_unwrap(args: argparse.Namespace) -> int:
     key = read_key(args.key)
-    text = args.text if args.text is not None else _read_file_text(args.in_file)
+    text = args.text if args.text is not None else _read_text_with_prompt(
+        args.in_file,
+        "Please enter text containing ENC[...] to unwrap (type /exit to cancel): ",
+    )
     print(unwrap_text(key, text))
     return 0
 
@@ -294,6 +306,17 @@ def _write_file_text(path: str, content: str) -> None:
         f.write(content)
 
 
+def _read_text_with_prompt(in_file: str | None, prompt: str) -> str:
+    if in_file is not None:
+        return _read_file_text(in_file)
+    value = input(prompt).strip()
+    if value.lower() in {"/exit", "exit", "quit", "q"}:
+        raise ValueError("Cancelled.")
+    if not value:
+        raise ValueError("Input cannot be empty.")
+    return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="All-in-one encrypted text toolkit for CLI + browser extension.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -369,21 +392,12 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     try:
-        if args.command in {"encrypt", "wrap"}:
-            if args.text is None and args.in_file is None:
-                raise ValueError("Provide --text or --in-file")
+        if args.command in {"encrypt", "wrap", "unwrap"}:
             if args.text is not None and args.in_file is not None:
                 raise ValueError("Use only one of --text or --in-file")
         if args.command in {"decrypt"}:
-            if args.token is None and args.in_file is None:
-                raise ValueError("Provide --token or --in-file")
             if args.token is not None and args.in_file is not None:
                 raise ValueError("Use only one of --token or --in-file")
-        if args.command in {"unwrap"}:
-            if args.text is None and args.in_file is None:
-                raise ValueError("Provide --text or --in-file")
-            if args.text is not None and args.in_file is not None:
-                raise ValueError("Use only one of --text or --in-file")
 
         return args.func(args)
     except Exception as exc:
