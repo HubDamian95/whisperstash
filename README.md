@@ -1,5 +1,24 @@
 # WhisperStash (CLI + Chrome extension)
 
+Local-first privacy toolkit for encrypting and decrypting text quickly from both terminal and browser.
+  - CLI commands to encrypt/decrypt text, wrap secrets as ENC[...], unwrap them, and transparently view/edit encrypted note files.
+  - A local daemon (whisperstash server) that keeps your passphrase in memory for the session and exposes localhost endpoints.
+  - A Chrome extension that can decrypt ENC[...] blocks on web pages by calling your local daemon.
+
+  Security model:
+
+  - Passphrase-based AES-GCM encryption with PBKDF2 key derivation.
+  - No cloud service required; browser integration talks to 127.0.0.1.
+  - Best practice is interactive passphrase entry (avoid putting keys in command history).
+
+
+  Why is it important? 
+  - Protects private notes/messages if files leak, sync gets compromised, or screenshots/logs are shared.
+  - Keeps secrets unreadable by default (ENC[...]) while still being easy to decrypt when you need them.
+  - Works locally, so you’re not forced to trust a third-party server with raw content.
+  - Gives a practical workflow: encrypt in CLI, decrypt in browser/page context only on your device.
+  - Reduces human error by making secure behavior the easy behavior (one command, one local daemon, one extension button).
+
 ## One-step install
 
 ```bash
