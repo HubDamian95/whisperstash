@@ -30,6 +30,12 @@ curl -fsSL https://raw.githubusercontent.com/HubDamian95/whisperstash/main/insta
 Windows (PowerShell):
 
 ```powershell
+Set-ExecutionPolicy -Scope Process Bypass -Force
+irm https://raw.githubusercontent.com/HubDamian95/whisperstash/main/install.ps1 | iex
+```
+
+If you run install from `cmd.exe`, use:
+```bat
 powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/HubDamian95/whisperstash/main/install.ps1 | iex"
 ```
 
