@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>WhisperStash</title>
+    <style>
+      body { font-family: Arial, sans-serif; width: 300px; margin: 12px; }
+      button { width: 100%; margin-top: 8px; padding: 8px; }
+      #status { font-size: 12px; margin-top: 8px; white-space: pre-wrap; }
+      .hint { font-size: 12px; color: #555; margin-top: 6px; }
+    </style>
+  </head>
+  <body>
+    <h3>WhisperStash</h3>
+    <button id="health">Check local server</button>
+    <button id="decrypt">Decrypt ENC[...] on this page</button>
+    <div class="hint">Run: <code>python3 whisperstash.py server</code></div>
+    <div id="status"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>
