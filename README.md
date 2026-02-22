@@ -83,6 +83,8 @@ Clipboard helpers:
 ```bash
 whisperstash encrypt --from-clipboard --copy
 whisperstash decrypt --from-clipboard --copy
+whisperstash wrap --from-clipboard --copy
+whisperstash unwrap --from-clipboard --copy
 ```
 
 Set a default key once (used automatically by encrypt/decrypt/wrap/unwrap/view/edit/server):
@@ -112,6 +114,8 @@ Decode a base64 text file, encrypt it, and write a `.enc` file:
 whisperstash b64-to-enc --in-file secret.b64
 # optional output path:
 whisperstash b64-to-enc --in-file secret.b64 --out-file secret.enc
+# optional integrity token format:
+whisperstash b64-to-enc --in-file secret.b64 --integrity
 ```
 
 Encrypt any file into a `.enc` token file (file bytes -> base64 -> encrypted token):
@@ -121,6 +125,8 @@ whisperstash file-encrypt --in-file photo.jpg
 whisperstash file-encrypt --in-file photo.jpg --out-file photo.enc
 # interactive prompt mode:
 whisperstash file-encrypt
+# optional integrity token format:
+whisperstash file-encrypt --in-file photo.jpg --integrity
 ```
 
 Decrypt a `.enc` token file back to original bytes:
@@ -138,6 +144,9 @@ whisperstash batch encrypt --in-dir ./docs --include "*.txt" --exclude "tmp/*" -
 whisperstash batch encrypt --in-dir ./docs --out-dir ./docs_enc --include "*.txt"
 whisperstash batch decrypt --in-dir ./docs_enc --out-dir ./docs_restored --include "*.enc"
 ```
+Defaults:
+- `batch encrypt`: includes all files (`*`), writes `<name>.<ext>.enc`
+- `batch decrypt`: includes `*.enc`, writes output with `.enc` suffix removed
 
 Installation/runtime diagnostics:
 ```bash
@@ -155,6 +164,31 @@ Optional hardening with bearer token:
 whisperstash server --auth-token "my-local-token"
 ```
 Then enter the same token in the extension popup field.
+
+Equivalent via environment variable:
+```bash
+WHISPERSTASH_AUTH_TOKEN=my-local-token whisperstash server
+```
+
+## CLI command reference
+```bash
+whisperstash encrypt
+whisperstash decrypt
+whisperstash wrap
+whisperstash unwrap
+whisperstash view <file.enc>
+whisperstash edit <file.enc>
+whisperstash server
+whisperstash b64-to-enc --in-file <file.b64>
+whisperstash file-encrypt --in-file <file>
+whisperstash file-decrypt --in-file <file.enc>
+whisperstash batch encrypt --in-dir <dir>
+whisperstash batch decrypt --in-dir <dir>
+whisperstash doctor
+whisperstash key set
+whisperstash key status
+whisperstash key clear
+```
 
 ## 3) Load Chrome extension
 1. Open `chrome://extensions`
