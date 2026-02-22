@@ -1,5 +1,9 @@
 # WhisperStash (CLI + Chrome extension)
 
+`whisperstash ui`
+<img width="1235" height="780" alt="image" src="https://github.com/user-attachments/assets/0f9d99c7-a9de-4a8b-b69f-3afa44aaf75e" />
+
+
 Local-first privacy toolkit for encrypting and decrypting text quickly from both terminal and browser.
   - CLI commands to encrypt/decrypt text, wrap secrets as ENC[...], unwrap them, and transparently view/edit encrypted note files.
   - A local daemon (whisperstash server) that keeps your passphrase in memory for the session and exposes localhost endpoints.
