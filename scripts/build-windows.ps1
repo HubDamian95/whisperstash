@@ -22,7 +22,7 @@ if (-not (Test-Path $IconPng)) {
 New-Item -ItemType Directory -Force -Path dist | Out-Null
 & $Py -c "from PIL import Image; Image.open(r'$IconPng').save(r'$IconIco', format='ICO')"
 
-& $Py -m PyInstaller --onefile --name whisperstash --icon "$IconIco" whisperstash.py
+& $Py -m PyInstaller --onefile --name whisperstash --icon "$IconIco" --add-data "whisperstash_ui;whisperstash_ui" whisperstash.py
 
 New-Item -ItemType Directory -Force -Path dist\release | Out-Null
 Copy-Item dist\whisperstash.exe dist\release\whisperstash-windows-x86_64.exe -Force

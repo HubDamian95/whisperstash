@@ -10,7 +10,7 @@ python -m pip install --upgrade pip
 pip install pyinstaller cryptography
 
 rm -rf build dist
-pyinstaller --onefile --name whisperstash whisperstash.py
+pyinstaller --onefile --name whisperstash --add-data "whisperstash_ui:whisperstash_ui" whisperstash.py
 
 mkdir -p dist/release
 cp dist/whisperstash dist/release/whisperstash-linux-x86_64

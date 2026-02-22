@@ -483,7 +483,11 @@ def _transform_text(passphrase: str, text: str, mode: str, integrity: bool, auto
 
 def cmd_ui(args: argparse.Namespace) -> int:
     key = read_key(args.key)
-    ui_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "whisperstash_ui")
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        base_dir = getattr(sys, "_MEIPASS")
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    ui_dir = os.path.join(base_dir, "whisperstash_ui")
 
     def read_asset(name: str) -> bytes:
         path = os.path.join(ui_dir, name)
@@ -975,21 +979,30 @@ def _run_interactive_mode(parser: argparse.ArgumentParser) -> int:
             args = parser.parse_args(shlex.split(raw))
         except SystemExit:
             continue
-        code = _execute_args(args)
-        if code != 0:
-            print(f"(exit code {code})")
+        try:
+            code = _execute_args(args)
+            if code != 0:
+                print(f"(exit code {code})")
+        except Exception as exc:
+            print(f"Error: {exc}")
 
 
 def _execute_args(args: argparse.Namespace) -> int:
     if args.command in {"encrypt", "wrap", "unwrap"}:
-        if args.text is not None and args.in_file is not None:
+        text = getattr(args, "text", None)
+        in_file = getattr(args, "in_file", None)
+        from_clipboard = bool(getattr(args, "from_clipboard", False))
+        if text is not None and in_file is not None:
             raise ValueError("Use only one of --text or --in-file")
-        if getattr(args, "from_clipboard", False) and (args.text is not None or args.in_file is not None):
+        if from_clipboard and (text is not None or in_file is not None):
             raise ValueError("Use only one of --from-clipboard, --text, or --in-file")
     if args.command in {"decrypt"}:
-        if args.token is not None and args.in_file is not None:
+        token = getattr(args, "token", None)
+        in_file = getattr(args, "in_file", None)
+        from_clipboard = bool(getattr(args, "from_clipboard", False))
+        if token is not None and in_file is not None:
             raise ValueError("Use only one of --token or --in-file")
-        if getattr(args, "from_clipboard", False) and (args.token is not None or args.in_file is not None):
+        if from_clipboard and (token is not None or in_file is not None):
             raise ValueError("Use only one of --from-clipboard, --token, or --in-file")
 
     return args.func(args)

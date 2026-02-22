@@ -68,6 +68,7 @@ dist/release/whisperstash-windows-x86_64.exe
 ```
 Notes:
 - Windows `.exe` icon is sourced from `Whisperstash_logo_small_128.png`.
+- Both Linux/Windows binaries include `whisperstash_ui` static assets for `whisperstash ui`.
 
 ## GitHub release flow
 
