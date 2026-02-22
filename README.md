@@ -137,6 +137,7 @@ Then:
 - Do not hardcode your passphrase.
 - Prefer interactive key entry (no `--key`) to avoid shell history leakage.
 - Any decrypted page content becomes visible in the tab after replacement.
+- On Windows, `whisperstash key set` stores the default key protected with DPAPI (user/machine scoped).
 
 ## Privacy Policy
 - `PRIVACY.md`

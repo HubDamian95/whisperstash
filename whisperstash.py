@@ -10,7 +10,9 @@ import os
 import stat
 import re
 import subprocess
+import sys
 import tempfile
+import ctypes
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from cryptography.hazmat.primitives import hashes
@@ -36,7 +38,20 @@ def _read_default_key() -> str | None:
     if not os.path.exists(path):
         return None
     with open(path, "r", encoding="utf-8") as f:
-        key = f.read().strip()
+        raw = f.read().strip()
+    if not raw:
+        return None
+    if raw.startswith("DPAPI:"):
+        if sys.platform != "win32":
+            raise ValueError("DPAPI-protected key file can only be read on Windows.")
+        blob_b64 = raw[len("DPAPI:") :]
+        try:
+            blob = base64.b64decode(blob_b64.encode("ascii"), validate=True)
+        except (binascii.Error, UnicodeEncodeError) as exc:
+            raise ValueError(f"Corrupt DPAPI key file: {exc}") from exc
+        key = _dpapi_unprotect(blob).decode("utf-8")
+        return key or None
+    key = raw
     return key or None
 
 
@@ -46,7 +61,11 @@ def _write_default_key(key: str) -> str:
     if parent:
         os.makedirs(parent, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
-        f.write(key + "\n")
+        if sys.platform == "win32":
+            blob = _dpapi_protect(key.encode("utf-8"))
+            f.write(f"DPAPI:{base64.b64encode(blob).decode('ascii')}\n")
+        else:
+            f.write(key + "\n")
     try:
         os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
     except OSError:
@@ -61,6 +80,55 @@ def _clear_default_key() -> str:
     except FileNotFoundError:
         pass
     return path
+
+
+if sys.platform == "win32":
+    class _DATA_BLOB(ctypes.Structure):
+        _fields_ = [("cbData", ctypes.c_uint32), ("pbData", ctypes.POINTER(ctypes.c_ubyte))]
+
+
+    def _dpapi_protect(data: bytes) -> bytes:
+        in_buf = ctypes.create_string_buffer(data)
+        in_blob = _DATA_BLOB(len(data), ctypes.cast(in_buf, ctypes.POINTER(ctypes.c_ubyte)))
+        out_blob = _DATA_BLOB()
+        crypt32 = ctypes.windll.crypt32
+        kernel32 = ctypes.windll.kernel32
+        if not crypt32.CryptProtectData(
+            ctypes.byref(in_blob),
+            None,
+            None,
+            None,
+            None,
+            0,
+            ctypes.byref(out_blob),
+        ):
+            raise ValueError("Unable to protect key with Windows DPAPI.")
+        try:
+            return ctypes.string_at(out_blob.pbData, out_blob.cbData)
+        finally:
+            kernel32.LocalFree(out_blob.pbData)
+
+
+    def _dpapi_unprotect(data: bytes) -> bytes:
+        in_buf = ctypes.create_string_buffer(data)
+        in_blob = _DATA_BLOB(len(data), ctypes.cast(in_buf, ctypes.POINTER(ctypes.c_ubyte)))
+        out_blob = _DATA_BLOB()
+        crypt32 = ctypes.windll.crypt32
+        kernel32 = ctypes.windll.kernel32
+        if not crypt32.CryptUnprotectData(
+            ctypes.byref(in_blob),
+            None,
+            None,
+            None,
+            None,
+            0,
+            ctypes.byref(out_blob),
+        ):
+            raise ValueError("Unable to unprotect key with Windows DPAPI.")
+        try:
+            return ctypes.string_at(out_blob.pbData, out_blob.cbData)
+        finally:
+            kernel32.LocalFree(out_blob.pbData)
 
 
 def derive_key(passphrase: str, salt: bytes) -> bytes:
