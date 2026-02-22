@@ -222,6 +222,10 @@ UI features:
 - Manual modes: encrypt/decrypt/wrap/unwrap
 - NC2 integrity toggle
 - Auto-wrap option in Auto mode
+- Tabbed workflow `Text`: live transform workspace
+- Tabbed workflow `Files`: file-encrypt, file-decrypt, b64-to-enc
+- Tabbed workflow `Batch`: batch encrypt/decrypt with include/exclude and dry-run
+- Tabbed workflow `Tools`: doctor + key status
 
 ## CLI command reference
 ```bash

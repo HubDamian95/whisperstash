@@ -20,6 +20,8 @@ import urllib.request
 import urllib.error
 import shlex
 import webbrowser
+import io
+from contextlib import redirect_stdout
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from cryptography.hazmat.primitives import hashes
@@ -526,9 +528,6 @@ def cmd_ui(args: argparse.Namespace) -> int:
             self.wfile.write(body)
 
         def do_POST(self) -> None:
-            if self.path != "/api/transform":
-                self._send_json(404, {"ok": False, "error": "not found"})
-                return
             length = int(self.headers.get("Content-Length", "0"))
             raw = self.rfile.read(length) if length > 0 else b"{}"
             try:
@@ -538,15 +537,127 @@ def cmd_ui(args: argparse.Namespace) -> int:
                 return
 
             try:
-                text = str(data.get("text", ""))
-                mode = str(data.get("mode", "auto"))
-                integrity = bool(data.get("integrity", False))
-                auto_wrap = bool(data.get("auto_wrap", False))
-                if text == "":
-                    self._send_json(200, {"ok": True, "mode": mode, "output": ""})
+                if self.path == "/api/transform":
+                    text = str(data.get("text", ""))
+                    mode = str(data.get("mode", "auto"))
+                    integrity = bool(data.get("integrity", False))
+                    auto_wrap = bool(data.get("auto_wrap", False))
+                    if text == "":
+                        self._send_json(200, {"ok": True, "mode": mode, "output": ""})
+                        return
+                    detected_mode, output = _transform_text(key, text, mode, integrity, auto_wrap)
+                    self._send_json(200, {"ok": True, "mode": detected_mode, "output": output})
                     return
-                detected_mode, output = _transform_text(key, text, mode, integrity, auto_wrap)
-                self._send_json(200, {"ok": True, "mode": detected_mode, "output": output})
+                if self.path == "/api/file-encrypt":
+                    in_file = str(data.get("in_file", "")).strip()
+                    out_file = str(data.get("out_file", "")).strip()
+                    integrity = bool(data.get("integrity", False))
+                    if not in_file:
+                        raise ValueError("in_file is required")
+                    if not os.path.isfile(in_file):
+                        raise ValueError(f"Input file not found: {in_file}")
+                    with open(in_file, "rb") as f:
+                        b64_text = base64.b64encode(f.read()).decode("ascii")
+                    token = encrypt_text(key, b64_text, integrity=integrity)
+                    out_path = out_file if out_file else _default_enc_output_path(in_file)
+                    _write_file_text(out_path, token + "\n")
+                    self._send_json(200, {"ok": True, "output_file": out_path})
+                    return
+                if self.path == "/api/file-decrypt":
+                    in_file = str(data.get("in_file", "")).strip()
+                    out_file = str(data.get("out_file", "")).strip()
+                    if not in_file:
+                        raise ValueError("in_file is required")
+                    if not os.path.isfile(in_file):
+                        raise ValueError(f"Input file not found: {in_file}")
+                    token = _read_file_text(in_file).strip()
+                    b64_text = decrypt_text(key, token)
+                    data_bytes = base64.b64decode(b64_text.encode("ascii"), validate=True)
+                    out_path = out_file if out_file else _default_dec_output_path(in_file)
+                    with open(out_path, "wb") as f:
+                        f.write(data_bytes)
+                    self._send_json(200, {"ok": True, "output_file": out_path})
+                    return
+                if self.path == "/api/b64-to-enc":
+                    in_file = str(data.get("in_file", "")).strip()
+                    out_file = str(data.get("out_file", "")).strip()
+                    integrity = bool(data.get("integrity", False))
+                    if not in_file:
+                        raise ValueError("in_file is required")
+                    raw_b64 = _read_file_text(in_file).strip()
+                    decoded_bytes = base64.b64decode(raw_b64, validate=True)
+                    plain = decoded_bytes.decode("utf-8")
+                    token = encrypt_text(key, plain, integrity=integrity)
+                    out_path = out_file if out_file else _default_enc_output_path(in_file)
+                    _write_file_text(out_path, token + "\n")
+                    self._send_json(200, {"ok": True, "output_file": out_path})
+                    return
+                if self.path in {"/api/batch-encrypt", "/api/batch-decrypt"}:
+                    in_dir = str(data.get("in_dir", "")).strip()
+                    out_dir = str(data.get("out_dir", "")).strip()
+                    include = data.get("include", None)
+                    exclude = data.get("exclude", [])
+                    dry_run = bool(data.get("dry_run", False))
+                    integrity = bool(data.get("integrity", False))
+                    include_list = include if isinstance(include, list) else []
+                    exclude_list = exclude if isinstance(exclude, list) else []
+                    if not include_list:
+                        include_list = ["*"] if self.path.endswith("encrypt") else ["*.enc"]
+                    if not in_dir:
+                        raise ValueError("in_dir is required")
+                    in_dir_abs = os.path.abspath(in_dir)
+                    out_dir_abs = os.path.abspath(out_dir) if out_dir else None
+                    logs: list[str] = []
+                    count = 0
+                    for in_file, rel_path in _iter_matched_files(in_dir_abs, include_list, exclude_list):
+                        if self.path.endswith("encrypt"):
+                            rel_out = f"{rel_path}.enc"
+                            out_file = os.path.join(out_dir_abs, rel_out) if out_dir_abs else _default_enc_output_path(in_file)
+                            if dry_run:
+                                logs.append(f"DRY-RUN encrypt: {in_file} -> {out_file}")
+                                count += 1
+                                continue
+                            os.makedirs(os.path.dirname(out_file), exist_ok=True)
+                            with open(in_file, "rb") as f:
+                                b64_text = base64.b64encode(f.read()).decode("ascii")
+                            token = encrypt_text(key, b64_text, integrity=integrity)
+                            _write_file_text(out_file, token + "\n")
+                            logs.append(f"Encrypted: {in_file} -> {out_file}")
+                            count += 1
+                        else:
+                            rel_out = _default_dec_output_path(rel_path)
+                            out_file = os.path.join(out_dir_abs, rel_out) if out_dir_abs else _default_dec_output_path(in_file)
+                            if dry_run:
+                                logs.append(f"DRY-RUN decrypt: {in_file} -> {out_file}")
+                                count += 1
+                                continue
+                            os.makedirs(os.path.dirname(out_file), exist_ok=True)
+                            token = _read_file_text(in_file).strip()
+                            b64_text = decrypt_text(key, token)
+                            data_bytes = base64.b64decode(b64_text.encode("ascii"), validate=True)
+                            with open(out_file, "wb") as f:
+                                f.write(data_bytes)
+                            logs.append(f"Decrypted: {in_file} -> {out_file}")
+                            count += 1
+                    self._send_json(200, {"ok": True, "count": count, "logs": logs})
+                    return
+                if self.path == "/api/doctor":
+                    buffer = io.StringIO()
+                    with redirect_stdout(buffer):
+                        rc = cmd_doctor(argparse.Namespace())
+                    self._send_json(200, {"ok": True, "exit_code": rc, "output": buffer.getvalue()})
+                    return
+                if self.path == "/api/key-status":
+                    self._send_json(
+                        200,
+                        {
+                            "ok": True,
+                            "path": _default_key_path(),
+                            "is_set": _read_default_key() is not None,
+                        },
+                    )
+                    return
+                self._send_json(404, {"ok": False, "error": "not found"})
             except Exception as exc:
                 self._send_json(400, {"ok": False, "error": str(exc)})
 

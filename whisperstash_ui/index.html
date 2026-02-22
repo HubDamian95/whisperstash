@@ -13,9 +13,18 @@
           <div class="brand-mark">WS</div>
           <div>
             <h1>WhisperStash</h1>
-            <p>Live local encrypt/decrypt workspace</p>
+            <p>Local-first encryption workspace</p>
           </div>
         </div>
+        <div class="tabbar">
+          <button class="tab active" data-tab="text">Text</button>
+          <button class="tab" data-tab="files">Files</button>
+          <button class="tab" data-tab="batch">Batch</button>
+          <button class="tab" data-tab="tools">Tools</button>
+        </div>
+      </header>
+
+      <section class="panel active" id="tab-text">
         <div class="controls">
           <label>
             Mode
@@ -30,24 +39,88 @@
           <label class="check"><input id="integrity" type="checkbox" /> Integrity (NC2)</label>
           <label class="check"><input id="autoWrap" type="checkbox" /> Auto mode: wrap output</label>
         </div>
-      </header>
 
-      <section class="panes">
-        <article class="pane">
-          <div class="pane-head">
-            <h2>Input</h2>
-            <button id="clearInput" type="button">Clear</button>
-          </div>
-          <textarea id="input" placeholder="Type plain text, ENC[...] content, or a token..."></textarea>
-        </article>
+        <div class="panes">
+          <article class="pane">
+            <div class="pane-head">
+              <h2>Input</h2>
+              <button id="clearInput" type="button">Clear</button>
+            </div>
+            <textarea id="input" placeholder="Type plain text, ENC[...] content, or a token..."></textarea>
+          </article>
 
-        <article class="pane">
-          <div class="pane-head">
-            <h2>Output</h2>
-            <button id="copyOutput" type="button">Copy</button>
-          </div>
-          <textarea id="output" readonly placeholder="Result appears here in real time..."></textarea>
-        </article>
+          <article class="pane">
+            <div class="pane-head">
+              <h2>Output</h2>
+              <button id="copyOutput" type="button">Copy</button>
+            </div>
+            <textarea id="output" readonly placeholder="Result appears here in real time..."></textarea>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel" id="tab-files">
+        <div class="grid-form">
+          <label>
+            Operation
+            <select id="fileOp">
+              <option value="file-encrypt">file-encrypt</option>
+              <option value="file-decrypt">file-decrypt</option>
+              <option value="b64-to-enc">b64-to-enc</option>
+            </select>
+          </label>
+          <label>
+            Input file
+            <input id="fileInput" placeholder="/path/to/input" />
+          </label>
+          <label>
+            Output file (optional)
+            <input id="fileOutput" placeholder="/path/to/output" />
+          </label>
+          <label class="check"><input id="fileIntegrity" type="checkbox" /> Integrity (encrypt only)</label>
+          <button id="runFileOp" type="button">Run File Operation</button>
+        </div>
+        <pre id="filesResult" class="result">Ready.</pre>
+      </section>
+
+      <section class="panel" id="tab-batch">
+        <div class="grid-form">
+          <label>
+            Operation
+            <select id="batchOp">
+              <option value="batch-encrypt">batch encrypt</option>
+              <option value="batch-decrypt">batch decrypt</option>
+            </select>
+          </label>
+          <label>
+            Input dir
+            <input id="batchInDir" placeholder="/path/to/input-dir" />
+          </label>
+          <label>
+            Output dir (optional)
+            <input id="batchOutDir" placeholder="/path/to/output-dir" />
+          </label>
+          <label>
+            Include patterns (comma separated)
+            <input id="batchInclude" placeholder="*.txt,subdir/*" />
+          </label>
+          <label>
+            Exclude patterns (comma separated)
+            <input id="batchExclude" placeholder="tmp/*,*.bak" />
+          </label>
+          <label class="check"><input id="batchDryRun" type="checkbox" /> Dry run</label>
+          <label class="check"><input id="batchIntegrity" type="checkbox" /> Integrity (encrypt only)</label>
+          <button id="runBatchOp" type="button">Run Batch Operation</button>
+        </div>
+        <pre id="batchResult" class="result">Ready.</pre>
+      </section>
+
+      <section class="panel" id="tab-tools">
+        <div class="tool-row">
+          <button id="runDoctor" type="button">Run Doctor</button>
+          <button id="runKeyStatus" type="button">Key Status</button>
+        </div>
+        <pre id="toolsResult" class="result">Ready.</pre>
       </section>
 
       <footer class="statusbar">
