@@ -517,7 +517,22 @@ def cmd_ui(args: argparse.Namespace) -> int:
 
         def _is_ui_authorized(self) -> bool:
             header = self.headers.get("X-WhisperStash-UI-Token", "")
-            return hmac.compare_digest(header, ui_token)
+            if header and hmac.compare_digest(header, ui_token):
+                return True
+
+            # Fallback: allow same-origin UI requests for this exact UI host/port.
+            origin = self.headers.get("Origin", "")
+            referer = self.headers.get("Referer", "")
+            allowed_origins = {
+                f"http://{args.host}:{args.port}",
+                f"http://127.0.0.1:{args.port}",
+                f"http://localhost:{args.port}",
+            }
+            if origin in allowed_origins:
+                return True
+            if any(referer.startswith(o + "/") or referer == o for o in allowed_origins):
+                return True
+            return False
 
         def do_OPTIONS(self) -> None:
             self.send_response(204)
@@ -572,7 +587,7 @@ def cmd_ui(args: argparse.Namespace) -> int:
 
         def do_POST(self) -> None:
             if not self._is_ui_authorized():
-                self._send_json(401, {"ok": False, "error": "unauthorized"})
+                self._send_json(401, {"ok": False, "error": "unauthorized (open UI from this process URL)"})
                 return
             length = int(self.headers.get("Content-Length", "0"))
             raw = self.rfile.read(length) if length > 0 else b"{}"
