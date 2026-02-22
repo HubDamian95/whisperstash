@@ -18,6 +18,7 @@ import hashlib
 import fnmatch
 import urllib.request
 import urllib.error
+import shlex
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from cryptography.hazmat.primitives import hashes
@@ -703,6 +704,49 @@ def _default_dec_output_path(in_file: str) -> str:
     return f"{in_file}.out"
 
 
+def _run_interactive_mode(parser: argparse.ArgumentParser) -> int:
+    print("WhisperStash interactive mode")
+    print("Type a command (e.g. encrypt --text \"hello\"), or 'help', or 'exit'.")
+    while True:
+        try:
+            raw = input("whisperstash> ").strip()
+        except EOFError:
+            print("")
+            return 0
+        except KeyboardInterrupt:
+            print("")
+            return 0
+        if not raw:
+            continue
+        if raw.lower() in {"exit", "quit", "q"}:
+            return 0
+        if raw.lower() in {"help", "h", "?"}:
+            parser.print_help()
+            continue
+        try:
+            args = parser.parse_args(shlex.split(raw))
+        except SystemExit:
+            continue
+        code = _execute_args(args)
+        if code != 0:
+            print(f"(exit code {code})")
+
+
+def _execute_args(args: argparse.Namespace) -> int:
+    if args.command in {"encrypt", "wrap", "unwrap"}:
+        if args.text is not None and args.in_file is not None:
+            raise ValueError("Use only one of --text or --in-file")
+        if getattr(args, "from_clipboard", False) and (args.text is not None or args.in_file is not None):
+            raise ValueError("Use only one of --from-clipboard, --text, or --in-file")
+    if args.command in {"decrypt"}:
+        if args.token is not None and args.in_file is not None:
+            raise ValueError("Use only one of --token or --in-file")
+        if getattr(args, "from_clipboard", False) and (args.token is not None or args.in_file is not None):
+            raise ValueError("Use only one of --from-clipboard, --token, or --in-file")
+
+    return args.func(args)
+
+
 def _iter_matched_files(in_dir: str, include: list[str], exclude: list[str]) -> list[tuple[str, str]]:
     if not os.path.isdir(in_dir):
         raise ValueError(f"Input directory not found: {in_dir}")
@@ -850,20 +894,15 @@ def _validate_source_args(args: argparse.Namespace) -> None:
 
 def main() -> int:
     parser = build_parser()
+    if len(sys.argv) == 1:
+        if sys.stdin.isatty():
+            return _run_interactive_mode(parser)
+        parser.print_help()
+        return 1
+
     args = parser.parse_args()
     try:
-        if args.command in {"encrypt", "wrap", "unwrap"}:
-            if args.text is not None and args.in_file is not None:
-                raise ValueError("Use only one of --text or --in-file")
-            if getattr(args, "from_clipboard", False) and (args.text is not None or args.in_file is not None):
-                raise ValueError("Use only one of --from-clipboard, --text, or --in-file")
-        if args.command in {"decrypt"}:
-            if args.token is not None and args.in_file is not None:
-                raise ValueError("Use only one of --token or --in-file")
-            if getattr(args, "from_clipboard", False) and (args.token is not None or args.in_file is not None):
-                raise ValueError("Use only one of --from-clipboard, --token, or --in-file")
-
-        return args.func(args)
+        return _execute_args(args)
     except Exception as exc:
         print(f"Error: {exc}")
         return 1

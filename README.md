@@ -223,6 +223,10 @@ whisperstash key status
 whisperstash key clear
 ```
 
+No-argument behavior:
+- Running `whisperstash` with no args starts interactive mode.
+- This is useful for double-clicking the Windows `.exe` binary (window stays open and accepts commands).
+
 ## 3) Load Chrome extension
 1. Open `chrome://extensions`
 2. Enable `Developer mode`
