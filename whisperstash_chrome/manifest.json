@@ -3,7 +3,7 @@
   "name": "WhisperStash Local Decrypt",
   "version": "1.0.0",
   "description": "Decrypt ENC[...] text blocks using local WhisperStash daemon.",
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": ["activeTab"],
   "host_permissions": ["http://127.0.0.1:8765/*"],
   "action": {
     "default_title": "WhisperStash",
