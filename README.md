@@ -57,11 +57,15 @@ Update later by re-running the same command.
 Encrypt text:
 ```bash
 whisperstash encrypt --text "hello"
+# with integrity protection (NC2 + HMAC):
+whisperstash encrypt --text "hello" --integrity
 ```
 
 Wrap text as `ENC[...]`:
 ```bash
 whisperstash wrap --text "secret message"
+# with integrity protection:
+whisperstash wrap --text "secret message" --integrity
 ```
 
 Decrypt token:
@@ -138,6 +142,7 @@ Then:
 - Prefer interactive key entry (no `--key`) to avoid shell history leakage.
 - Any decrypted page content becomes visible in the tab after replacement.
 - On Windows, `whisperstash key set` stores the default key protected with DPAPI (user/machine scoped).
+- Use `--integrity` to produce NC2 tokens with HMAC integrity checks.
 
 ## Privacy Policy
 - `PRIVACY.md`

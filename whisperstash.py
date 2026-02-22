@@ -5,6 +5,7 @@ import argparse
 import base64
 import binascii
 import getpass
+import hmac
 import json
 import os
 import stat
@@ -13,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import ctypes
+import hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from cryptography.hazmat.primitives import hashes
@@ -20,6 +22,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 VERSION = b"NC1"
+VERSION_INTEGRITY = b"NC2"
 SALT_LEN = 16
 NONCE_LEN = 12
 PBKDF2_ITERS = 250_000
@@ -141,12 +144,22 @@ def derive_key(passphrase: str, salt: bytes) -> bytes:
     return kdf.derive(passphrase.encode("utf-8"))
 
 
-def encrypt_text(passphrase: str, plaintext: str) -> str:
+def derive_integrity_key(passphrase: str, salt: bytes) -> bytes:
+    return hashlib.pbkdf2_hmac("sha256", passphrase.encode("utf-8"), salt + b"|mac", PBKDF2_ITERS, dklen=32)
+
+
+def encrypt_text(passphrase: str, plaintext: str, integrity: bool = False) -> str:
     salt = os.urandom(SALT_LEN)
     nonce = os.urandom(NONCE_LEN)
     key = derive_key(passphrase, salt)
     ciphertext = AESGCM(key).encrypt(nonce, plaintext.encode("utf-8"), None)
-    token = VERSION + salt + nonce + ciphertext
+    if integrity:
+        mac_key = derive_integrity_key(passphrase, salt)
+        msg = VERSION_INTEGRITY + salt + nonce + ciphertext
+        mac = hmac.new(mac_key, msg, hashlib.sha256).digest()
+        token = msg + mac
+    else:
+        token = VERSION + salt + nonce + ciphertext
     return base64.urlsafe_b64encode(token).decode("ascii")
 
 
@@ -154,14 +167,25 @@ def decrypt_text(passphrase: str, token: str) -> str:
     raw = base64.urlsafe_b64decode(token.encode("ascii"))
     if len(raw) < len(VERSION) + SALT_LEN + NONCE_LEN + 16:
         raise ValueError("Token is too short or malformed.")
-    if raw[: len(VERSION)] != VERSION:
+    version = raw[: len(VERSION)]
+    if version not in {VERSION, VERSION_INTEGRITY}:
         raise ValueError("Unsupported token version.")
     pos = len(VERSION)
     salt = raw[pos : pos + SALT_LEN]
     pos += SALT_LEN
     nonce = raw[pos : pos + NONCE_LEN]
     pos += NONCE_LEN
-    ciphertext = raw[pos:]
+    if version == VERSION_INTEGRITY:
+        if len(raw) < len(VERSION_INTEGRITY) + SALT_LEN + NONCE_LEN + 16 + 32:
+            raise ValueError("Token is too short or malformed.")
+        ciphertext = raw[pos:-32]
+        mac = raw[-32:]
+        mac_key = derive_integrity_key(passphrase, salt)
+        expected = hmac.new(mac_key, raw[: len(raw) - 32], hashlib.sha256).digest()
+        if not hmac.compare_digest(expected, mac):
+            raise ValueError("Integrity check failed (token may be tampered or key is wrong).")
+    else:
+        ciphertext = raw[pos:]
     key = derive_key(passphrase, salt)
     plaintext = AESGCM(key).decrypt(nonce, ciphertext, None)
     return plaintext.decode("utf-8")
@@ -208,8 +232,8 @@ def cmd_key_status(args: argparse.Namespace) -> int:
     return 0
 
 
-def wrap_text(passphrase: str, plaintext: str) -> str:
-    return f"ENC[{encrypt_text(passphrase, plaintext)}]"
+def wrap_text(passphrase: str, plaintext: str, integrity: bool = False) -> str:
+    return f"ENC[{encrypt_text(passphrase, plaintext, integrity=integrity)}]"
 
 
 def unwrap_text(passphrase: str, text: str) -> str:
@@ -226,7 +250,7 @@ def cmd_encrypt(args: argparse.Namespace) -> int:
         args.in_file,
         "Please enter what you'd like to encrypt (type /exit to cancel): ",
     )
-    print(encrypt_text(key, text))
+    print(encrypt_text(key, text, integrity=args.integrity))
     return 0
 
 
@@ -246,7 +270,7 @@ def cmd_wrap(args: argparse.Namespace) -> int:
         args.in_file,
         "Please enter what you'd like to wrap (type /exit to cancel): ",
     )
-    print(wrap_text(key, text))
+    print(wrap_text(key, text, integrity=args.integrity))
     return 0
 
 
@@ -282,7 +306,7 @@ def cmd_edit(args: argparse.Namespace) -> int:
     try:
         subprocess.run([editor, temp_path], check=True)
         updated = _read_file_text(temp_path)
-        new_token = encrypt_text(key, updated)
+        new_token = encrypt_text(key, updated, integrity=args.integrity)
         _write_file_text(args.file, new_token + "\n")
     finally:
         try:
@@ -377,7 +401,7 @@ def cmd_b64_to_enc(args: argparse.Namespace) -> int:
     except UnicodeDecodeError as exc:
         raise ValueError("Decoded base64 is not valid UTF-8 text.") from exc
 
-    token = encrypt_text(key, plain)
+    token = encrypt_text(key, plain, integrity=args.integrity)
     out_file = args.out_file if args.out_file else _default_enc_output_path(args.in_file)
     _write_file_text(out_file, token + "\n")
     print(f"Wrote encrypted token to {out_file}")
@@ -397,7 +421,7 @@ def cmd_file_encrypt(args: argparse.Namespace) -> int:
     with open(in_file, "rb") as f:
         data = f.read()
     b64_text = base64.b64encode(data).decode("ascii")
-    token = encrypt_text(key, b64_text)
+    token = encrypt_text(key, b64_text, integrity=args.integrity)
 
     out_file = args.out_file if args.out_file else _default_enc_output_path(in_file)
     _write_file_text(out_file, token + "\n")
@@ -471,6 +495,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--text", help="Plain text")
     p.add_argument("--in-file", help="Read plain text from file")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
+    p.add_argument("--integrity", action="store_true", help="Use NC2 token format with HMAC integrity check")
     p.set_defaults(func=cmd_encrypt)
 
     p = sub.add_parser("decrypt", help="Decrypt token to plain text")
@@ -483,6 +508,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--text", help="Plain text")
     p.add_argument("--in-file", help="Read plain text from file")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
+    p.add_argument("--integrity", action="store_true", help="Use NC2 token format with HMAC integrity check")
     p.set_defaults(func=cmd_wrap)
 
     p = sub.add_parser("unwrap", help="Decrypt all ENC[...] blocks in text")
@@ -499,6 +525,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("edit", help="Decrypt token file, edit, and re-encrypt")
     p.add_argument("file", help="File containing a token")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
+    p.add_argument("--integrity", action="store_true", help="Write updated file as NC2 integrity token")
     p.set_defaults(func=cmd_edit)
 
     p = sub.add_parser("server", help="Run localhost API for browser extension")
@@ -511,12 +538,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--in-file", required=True, help="Input file containing base64 text")
     p.add_argument("--out-file", help="Output .enc file path (default: input with .enc extension)")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
+    p.add_argument("--integrity", action="store_true", help="Use NC2 token format with HMAC integrity check")
     p.set_defaults(func=cmd_b64_to_enc)
 
     p = sub.add_parser("file-encrypt", help="Base64-encode any file and encrypt into .enc token file")
     p.add_argument("--in-file", help="Input file path (if omitted, prompt interactively)")
     p.add_argument("--out-file", help="Output .enc file path (default: input with .enc extension)")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
+    p.add_argument("--integrity", action="store_true", help="Use NC2 token format with HMAC integrity check")
     p.set_defaults(func=cmd_file_encrypt)
 
     p = sub.add_parser("file-decrypt", help="Decrypt .enc token file and restore original file bytes")
