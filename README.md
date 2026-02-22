@@ -61,6 +61,12 @@ whisperstash encrypt --text "hello"
 whisperstash encrypt --text "hello" --integrity
 ```
 
+Interactive multiline mode:
+```bash
+whisperstash encrypt
+# paste/type lines, then enter EOF on its own line to finish
+```
+
 Wrap text as `ENC[...]`:
 ```bash
 whisperstash wrap --text "secret message"

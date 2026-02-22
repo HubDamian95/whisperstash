@@ -248,7 +248,8 @@ def cmd_encrypt(args: argparse.Namespace) -> int:
     key = read_key(args.key)
     text = args.text if args.text is not None else _read_text_with_prompt(
         args.in_file,
-        "Please enter what you'd like to encrypt (type /exit to cancel): ",
+        "Please enter what you'd like to encrypt.",
+        multiline=True,
     )
     print(encrypt_text(key, text, integrity=args.integrity))
     return 0
@@ -268,7 +269,8 @@ def cmd_wrap(args: argparse.Namespace) -> int:
     key = read_key(args.key)
     text = args.text if args.text is not None else _read_text_with_prompt(
         args.in_file,
-        "Please enter what you'd like to wrap (type /exit to cancel): ",
+        "Please enter what you'd like to wrap.",
+        multiline=True,
     )
     print(wrap_text(key, text, integrity=args.integrity))
     return 0
@@ -278,7 +280,8 @@ def cmd_unwrap(args: argparse.Namespace) -> int:
     key = read_key(args.key)
     text = args.text if args.text is not None else _read_text_with_prompt(
         args.in_file,
-        "Please enter text containing ENC[...] to unwrap (type /exit to cancel): ",
+        "Please enter text containing ENC[...] to unwrap.",
+        multiline=True,
     )
     print(unwrap_text(key, text))
     return 0
@@ -463,12 +466,28 @@ def _write_file_text(path: str, content: str) -> None:
         f.write(content)
 
 
-def _read_text_with_prompt(in_file: str | None, prompt: str) -> str:
+def _read_text_with_prompt(in_file: str | None, prompt: str, multiline: bool = False) -> str:
     if in_file is not None:
         return _read_file_text(in_file)
-    value = input(prompt).strip()
-    if value.lower() in {"/exit", "exit", "quit", "q"}:
-        raise ValueError("Cancelled.")
+    if not multiline:
+        value = input(f"{prompt} (type /exit to cancel): ").strip()
+        if value.lower() in {"/exit", "exit", "quit", "q"}:
+            raise ValueError("Cancelled.")
+        if not value:
+            raise ValueError("Input cannot be empty.")
+        return value
+
+    print(f"{prompt} Type EOF on a new line when finished (or /exit to cancel).")
+    lines: list[str] = []
+    while True:
+        line = input()
+        stripped = line.strip().lower()
+        if stripped in {"/exit", "exit", "quit", "q"}:
+            raise ValueError("Cancelled.")
+        if line == "EOF":
+            break
+        lines.append(line)
+    value = "\n".join(lines).strip()
     if not value:
         raise ValueError("Input cannot be empty.")
     return value
