@@ -1,8 +1,14 @@
 # WhisperStash
 
-When creating this toolkit, what I had in mind is that our data is constantly being scraped by AI. I wanted an easy tool that I can use with some sort of "key" that I can share with bunch of my family and friends such that only the people I share the key with will understand, and then we will be able to hide what we're talking about. This is specifically important as more governments around the world are issuing ID checks, social media bans and information sharing is becoming less and less possible for people around the world. 
-
-I appreciate that this tool can also be used for nefarious purposes, although I hope it won't be. Please stay safe out there. 
+  > WhisperStash was built around a simple idea: private conversations should stay private.
+  > As more online activity is scraped and analyzed at scale, I wanted an easy way to share encrypted text with family
+  > and friends using a shared key, so only people with that key can read it.
+  >
+  > This matters even more in places where online expression is restricted, identity checks are increasing, or
+  > information sharing is becoming harder.
+  >
+  > Like any encryption tool, WhisperStash can be misused. It is provided for legitimate privacy and safety use. Please
+  > use it responsibly and stay safe.
 
 Local-first encryption toolkit with:
 - CLI workflows for text and files
