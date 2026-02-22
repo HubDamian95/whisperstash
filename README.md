@@ -17,6 +17,10 @@ Local-first encryption toolkit with:
 
 No cloud backend. Your data stays on your machine.
 
+<img width="1235" height="780" alt="image" src="https://github.com/user-attachments/assets/08d1683e-7f28-4a4a-8623-1b5a80c5057b" />
+
+
+
 ## Quick Install
 
 Linux/macOS:
