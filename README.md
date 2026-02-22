@@ -47,6 +47,39 @@ whisperstash --help
 
 Update later by re-running the same command.
 
+## Binary builds (single-file runtime)
+
+Build Linux binary locally:
+```bash
+./scripts/build-linux.sh
+```
+Output:
+```bash
+dist/release/whisperstash-linux-x86_64
+```
+
+Build Windows binary locally (PowerShell):
+```powershell
+./scripts/build-windows.ps1
+```
+Output:
+```powershell
+dist/release/whisperstash-windows-x86_64.exe
+```
+
+## GitHub release flow
+
+This repo includes `.github/workflows/release.yml` which:
+- triggers on tags matching `v*`
+- builds Linux and Windows binaries
+- uploads binaries as GitHub Release assets
+
+Create a release tag:
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
 ## Files
 - `whisperstash.py`: all-in-one CLI + localhost API daemon
 - `encsuite.py`: compatibility launcher
