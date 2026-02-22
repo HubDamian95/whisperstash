@@ -91,6 +91,13 @@ whisperstash view my_note.enc
 whisperstash edit my_note.enc
 ```
 
+Decode a base64 text file, encrypt it, and write a `.enc` file:
+```bash
+whisperstash b64-to-enc --in-file secret.b64
+# optional output path:
+whisperstash b64-to-enc --in-file secret.b64 --out-file secret.enc
+```
+
 ## 2) Start local daemon for browser integration
 ```bash
 whisperstash server

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
 import getpass
 import json
 import os
@@ -296,6 +297,25 @@ def cmd_server(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_b64_to_enc(args: argparse.Namespace) -> int:
+    key = read_key(args.key)
+    raw_b64 = _read_file_text(args.in_file).strip()
+    try:
+        decoded_bytes = base64.b64decode(raw_b64, validate=True)
+    except binascii.Error as exc:
+        raise ValueError(f"Invalid base64 input: {exc}") from exc
+    try:
+        plain = decoded_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("Decoded base64 is not valid UTF-8 text.") from exc
+
+    token = encrypt_text(key, plain)
+    out_file = args.out_file if args.out_file else _default_enc_output_path(args.in_file)
+    _write_file_text(out_file, token + "\n")
+    print(f"Wrote encrypted token to {out_file}")
+    return 0
+
+
 def _read_file_text(path: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
@@ -315,6 +335,13 @@ def _read_text_with_prompt(in_file: str | None, prompt: str) -> str:
     if not value:
         raise ValueError("Input cannot be empty.")
     return value
+
+
+def _default_enc_output_path(in_file: str) -> str:
+    root, _ = os.path.splitext(in_file)
+    if not root:
+        return f"{in_file}.enc"
+    return f"{root}.enc"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -360,6 +387,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--port", type=int, default=8765, help="Port")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
     p.set_defaults(func=cmd_server)
+
+    p = sub.add_parser("b64-to-enc", help="Decode base64 file and write encrypted .enc token file")
+    p.add_argument("--in-file", required=True, help="Input file containing base64 text")
+    p.add_argument("--out-file", help="Output .enc file path (default: input with .enc extension)")
+    p.add_argument("--key", help="Passphrase (avoid shell history)")
+    p.set_defaults(func=cmd_b64_to_enc)
 
     p = sub.add_parser("key", help="Manage default key/passphrase")
     key_sub = p.add_subparsers(dest="key_command", required=True)
