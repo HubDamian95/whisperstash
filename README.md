@@ -21,8 +21,16 @@ Local-first privacy toolkit for encrypting and decrypting text quickly from both
 
 ## One-step install
 
+Linux/macOS:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/HubDamian95/whisperstash/main/install.sh | bash
+```
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/HubDamian95/whisperstash/main/install.ps1 | iex"
 ```
 
 After install:
