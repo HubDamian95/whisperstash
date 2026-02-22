@@ -20,9 +20,10 @@ if (-not (Test-Path $IconPng)) {
 }
 
 New-Item -ItemType Directory -Force -Path dist | Out-Null
-& $Py -c "from PIL import Image; Image.open(r'$IconPng').save(r'$IconIco', format='ICO')"
+# Build a multi-size .ico to avoid generic icon fallback in some Windows views/caches.
+& $Py -c "from PIL import Image; img = Image.open(r'$IconPng').convert('RGBA'); img.save(r'$IconIco', format='ICO', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
 
-& $Py -m PyInstaller --onefile --name whisperstash --icon "$IconIco" --add-data "whisperstash_ui;whisperstash_ui" whisperstash.py
+& $Py -m PyInstaller --clean --noconfirm --onefile --name whisperstash --icon "$IconIco" --add-data "whisperstash_ui;whisperstash_ui" whisperstash.py
 
 New-Item -ItemType Directory -Force -Path dist\release | Out-Null
 Copy-Item dist\whisperstash.exe dist\release\whisperstash-windows-x86_64.exe -Force
