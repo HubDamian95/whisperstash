@@ -1,7 +1,9 @@
 import argparse
 import base64
+import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import whisperstash as ws
 
 
@@ -52,4 +54,3 @@ def test_b64_to_enc_roundtrip(tmp_path):
     assert ws.cmd_b64_to_enc(args) == 0
     token = enc_file.read_text(encoding="utf-8").strip()
     assert ws.decrypt_text("k1", token) == "content"
-
