@@ -15,6 +15,7 @@ import sys
 import tempfile
 import ctypes
 import hashlib
+import fnmatch
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from cryptography.hazmat.primitives import hashes
@@ -460,6 +461,31 @@ def cmd_file_encrypt(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_batch_encrypt(args: argparse.Namespace) -> int:
+    key = read_key(args.key)
+    in_dir = os.path.abspath(args.in_dir)
+    out_dir = os.path.abspath(args.out_dir) if args.out_dir else None
+    count = 0
+    include = args.include if args.include else ["*"]
+    for in_file, rel_path in _iter_matched_files(in_dir, include, args.exclude):
+        rel_out = f"{rel_path}.enc"
+        out_file = os.path.join(out_dir, rel_out) if out_dir else _default_enc_output_path(in_file)
+        if args.dry_run:
+            print(f"DRY-RUN encrypt: {in_file} -> {out_file}")
+            count += 1
+            continue
+        os.makedirs(os.path.dirname(out_file), exist_ok=True)
+        with open(in_file, "rb") as f:
+            data = f.read()
+        b64_text = base64.b64encode(data).decode("ascii")
+        token = encrypt_text(key, b64_text, integrity=args.integrity)
+        _write_file_text(out_file, token + "\n")
+        print(f"Encrypted: {in_file} -> {out_file}")
+        count += 1
+    print(f"Processed {count} file(s).")
+    return 0
+
+
 def cmd_file_decrypt(args: argparse.Namespace) -> int:
     key = read_key(args.key)
     in_file = args.in_file if args.in_file else input("Enter .enc file path to decrypt (type /exit to cancel): ").strip()
@@ -481,6 +507,34 @@ def cmd_file_decrypt(args: argparse.Namespace) -> int:
     with open(out_file, "wb") as f:
         f.write(data)
     print(f"Wrote decrypted file to {out_file}")
+    return 0
+
+
+def cmd_batch_decrypt(args: argparse.Namespace) -> int:
+    key = read_key(args.key)
+    in_dir = os.path.abspath(args.in_dir)
+    out_dir = os.path.abspath(args.out_dir) if args.out_dir else None
+    count = 0
+    include = args.include if args.include else ["*.enc"]
+    for in_file, rel_path in _iter_matched_files(in_dir, include, args.exclude):
+        rel_out = _default_dec_output_path(rel_path)
+        out_file = os.path.join(out_dir, rel_out) if out_dir else _default_dec_output_path(in_file)
+        if args.dry_run:
+            print(f"DRY-RUN decrypt: {in_file} -> {out_file}")
+            count += 1
+            continue
+        os.makedirs(os.path.dirname(out_file), exist_ok=True)
+        token = _read_file_text(in_file).strip()
+        b64_text = decrypt_text(key, token)
+        try:
+            data = base64.b64decode(b64_text.encode("ascii"), validate=True)
+        except (binascii.Error, UnicodeEncodeError) as exc:
+            raise ValueError(f"Decrypted token does not contain valid base64 file data: {in_file}: {exc}") from exc
+        with open(out_file, "wb") as f:
+            f.write(data)
+        print(f"Decrypted: {in_file} -> {out_file}")
+        count += 1
+    print(f"Processed {count} file(s).")
     return 0
 
 
@@ -575,6 +629,23 @@ def _default_dec_output_path(in_file: str) -> str:
     return f"{in_file}.out"
 
 
+def _iter_matched_files(in_dir: str, include: list[str], exclude: list[str]) -> list[tuple[str, str]]:
+    if not os.path.isdir(in_dir):
+        raise ValueError(f"Input directory not found: {in_dir}")
+    out: list[tuple[str, str]] = []
+    for root, _, files in os.walk(in_dir):
+        files.sort()
+        for name in files:
+            full = os.path.join(root, name)
+            rel = os.path.relpath(full, in_dir).replace(os.sep, "/")
+            if include and not any(fnmatch.fnmatch(rel, pat) for pat in include):
+                continue
+            if exclude and any(fnmatch.fnmatch(rel, pat) for pat in exclude):
+                continue
+            out.append((full, rel))
+    return out
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="All-in-one encrypted text toolkit for CLI + browser extension.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -649,6 +720,28 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out-file", help="Output file path (default: remove .enc suffix)")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
     p.set_defaults(func=cmd_file_decrypt)
+
+    p = sub.add_parser("batch", help="Batch file-encrypt/file-decrypt folders with include/exclude filters")
+    batch_sub = p.add_subparsers(dest="batch_command", required=True)
+
+    p_batch_enc = batch_sub.add_parser("encrypt", help="Encrypt matched files in a folder")
+    p_batch_enc.add_argument("--in-dir", required=True, help="Input directory")
+    p_batch_enc.add_argument("--out-dir", help="Output directory (default: alongside input files)")
+    p_batch_enc.add_argument("--include", action="append", help="Glob include pattern on relative path (repeatable)")
+    p_batch_enc.add_argument("--exclude", action="append", default=[], help="Glob exclude pattern on relative path")
+    p_batch_enc.add_argument("--dry-run", action="store_true", help="Show planned operations without writing files")
+    p_batch_enc.add_argument("--key", help="Passphrase (avoid shell history)")
+    p_batch_enc.add_argument("--integrity", action="store_true", help="Use NC2 token format with HMAC integrity check")
+    p_batch_enc.set_defaults(func=cmd_batch_encrypt)
+
+    p_batch_dec = batch_sub.add_parser("decrypt", help="Decrypt matched .enc files in a folder")
+    p_batch_dec.add_argument("--in-dir", required=True, help="Input directory")
+    p_batch_dec.add_argument("--out-dir", help="Output directory (default: alongside input files)")
+    p_batch_dec.add_argument("--include", action="append", help="Glob include pattern on relative path (repeatable)")
+    p_batch_dec.add_argument("--exclude", action="append", default=[], help="Glob exclude pattern on relative path")
+    p_batch_dec.add_argument("--dry-run", action="store_true", help="Show planned operations without writing files")
+    p_batch_dec.add_argument("--key", help="Passphrase (avoid shell history)")
+    p_batch_dec.set_defaults(func=cmd_batch_decrypt)
 
     p = sub.add_parser("key", help="Manage default key/passphrase")
     key_sub = p.add_subparsers(dest="key_command", required=True)

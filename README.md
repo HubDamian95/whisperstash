@@ -132,6 +132,13 @@ whisperstash file-decrypt --in-file photo.enc --out-file photo_restored.jpg
 whisperstash file-decrypt
 ```
 
+Batch folder mode with include/exclude and dry-run:
+```bash
+whisperstash batch encrypt --in-dir ./docs --include "*.txt" --exclude "tmp/*" --dry-run
+whisperstash batch encrypt --in-dir ./docs --out-dir ./docs_enc --include "*.txt"
+whisperstash batch decrypt --in-dir ./docs_enc --out-dir ./docs_restored --include "*.enc"
+```
+
 ## 2) Start local daemon for browser integration
 ```bash
 whisperstash server
