@@ -28,7 +28,7 @@ jobs:
       - name: Build Linux binary
         if: runner.os == 'Linux'
         run: |
-          ./scripts/build-linux.sh
+          bash ./scripts/build-linux.sh
 
       - name: Build Windows binary
         if: runner.os == 'Windows'
