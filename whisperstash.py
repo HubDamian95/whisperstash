@@ -19,6 +19,7 @@ import fnmatch
 import urllib.request
 import urllib.error
 import shlex
+import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from cryptography.hazmat.primitives import hashes
@@ -438,6 +439,139 @@ def cmd_server(args: argparse.Namespace) -> int:
     return 0
 
 
+def _looks_like_token(value: str) -> bool:
+    if not value:
+        return False
+    if any(ch.isspace() for ch in value):
+        return False
+    allowed = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-=")
+    return all(ch in allowed for ch in value)
+
+
+def _transform_text(passphrase: str, text: str, mode: str, integrity: bool, auto_wrap: bool) -> tuple[str, str]:
+    selected = mode.lower().strip()
+    if selected == "encrypt":
+        return ("encrypt", encrypt_text(passphrase, text, integrity=integrity))
+    if selected == "decrypt":
+        return ("decrypt", decrypt_text(passphrase, text.strip()))
+    if selected == "wrap":
+        return ("wrap", wrap_text(passphrase, text, integrity=integrity))
+    if selected == "unwrap":
+        return ("unwrap", unwrap_text(passphrase, text))
+    if selected != "auto":
+        raise ValueError(f"Unknown mode: {mode}")
+
+    if "ENC[" in text:
+        try:
+            return ("unwrap", unwrap_text(passphrase, text))
+        except Exception:
+            pass
+
+    stripped = text.strip()
+    if _looks_like_token(stripped):
+        try:
+            return ("decrypt", decrypt_text(passphrase, stripped))
+        except Exception:
+            pass
+
+    if auto_wrap:
+        return ("wrap", wrap_text(passphrase, text, integrity=integrity))
+    return ("encrypt", encrypt_text(passphrase, text, integrity=integrity))
+
+
+def cmd_ui(args: argparse.Namespace) -> int:
+    key = read_key(args.key)
+    ui_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "whisperstash_ui")
+
+    def read_asset(name: str) -> bytes:
+        path = os.path.join(ui_dir, name)
+        with open(path, "rb") as f:
+            return f.read()
+
+    assets = {
+        "/": ("text/html; charset=utf-8", read_asset("index.html")),
+        "/index.html": ("text/html; charset=utf-8", read_asset("index.html")),
+        "/app.js": ("application/javascript; charset=utf-8", read_asset("app.js")),
+        "/styles.css": ("text/css; charset=utf-8", read_asset("styles.css")),
+    }
+
+    class Handler(BaseHTTPRequestHandler):
+        def _send_json(self, status: int, payload: dict) -> None:
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_OPTIONS(self) -> None:
+            self._send_json(200, {"ok": True})
+
+        def do_GET(self) -> None:
+            if self.path == "/api/health":
+                self._send_json(200, {"ok": True, "service": "whisperstash-ui"})
+                return
+            asset = assets.get(self.path)
+            if asset is None:
+                self._send_json(404, {"ok": False, "error": "not found"})
+                return
+            content_type, body = asset
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self) -> None:
+            if self.path != "/api/transform":
+                self._send_json(404, {"ok": False, "error": "not found"})
+                return
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length) if length > 0 else b"{}"
+            try:
+                data = json.loads(raw.decode("utf-8"))
+            except json.JSONDecodeError:
+                self._send_json(400, {"ok": False, "error": "invalid json"})
+                return
+
+            try:
+                text = str(data.get("text", ""))
+                mode = str(data.get("mode", "auto"))
+                integrity = bool(data.get("integrity", False))
+                auto_wrap = bool(data.get("auto_wrap", False))
+                if text == "":
+                    self._send_json(200, {"ok": True, "mode": mode, "output": ""})
+                    return
+                detected_mode, output = _transform_text(key, text, mode, integrity, auto_wrap)
+                self._send_json(200, {"ok": True, "mode": detected_mode, "output": output})
+            except Exception as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+
+        def log_message(self, fmt: str, *args) -> None:
+            if not args:
+                return
+
+    server = HTTPServer((args.host, args.port), Handler)
+    url = f"http://{args.host}:{args.port}"
+    print(f"whisperstash ui listening on {url}")
+    print("Press Ctrl+C to stop.")
+    if not args.no_open:
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nUI stopped.")
+    finally:
+        server.server_close()
+    return 0
+
+
 def cmd_b64_to_enc(args: argparse.Namespace) -> int:
     key = read_key(args.key)
     raw_b64 = _read_file_text(args.in_file).strip()
@@ -840,6 +974,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--key", help="Passphrase (avoid shell history)")
     p.add_argument("--auth-token", help="Optional bearer token required by API clients")
     p.set_defaults(func=cmd_server)
+
+    p = sub.add_parser("ui", help="Run modern local UI for live encrypt/decrypt")
+    p.add_argument("--host", default="127.0.0.1", help="Host bind address")
+    p.add_argument("--port", type=int, default=8787, help="Port")
+    p.add_argument("--key", help="Passphrase (avoid shell history)")
+    p.add_argument("--no-open", action="store_true", help="Do not auto-open browser")
+    p.set_defaults(func=cmd_ui)
 
     p = sub.add_parser("b64-to-enc", help="Decode base64 file and write encrypted .enc token file")
     p.add_argument("--in-file", required=True, help="Input file containing base64 text")

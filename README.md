@@ -205,6 +205,24 @@ Equivalent via environment variable:
 WHISPERSTASH_AUTH_TOKEN=my-local-token whisperstash server
 ```
 
+## Modern UI
+Run the local modern UI:
+```bash
+whisperstash ui
+```
+
+Optional flags:
+```bash
+whisperstash ui --port 8787 --no-open
+```
+
+UI features:
+- Live transform while typing
+- Auto mode (detect decrypt/unwrap when input looks encrypted)
+- Manual modes: encrypt/decrypt/wrap/unwrap
+- NC2 integrity toggle
+- Auto-wrap option in Auto mode
+
 ## CLI command reference
 ```bash
 whisperstash encrypt

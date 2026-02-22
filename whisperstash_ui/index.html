@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WhisperStash UI</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">WS</div>
+          <div>
+            <h1>WhisperStash</h1>
+            <p>Live local encrypt/decrypt workspace</p>
+          </div>
+        </div>
+        <div class="controls">
+          <label>
+            Mode
+            <select id="mode">
+              <option value="auto" selected>Auto</option>
+              <option value="encrypt">Encrypt</option>
+              <option value="decrypt">Decrypt</option>
+              <option value="wrap">Wrap ENC[...]</option>
+              <option value="unwrap">Unwrap ENC[...]</option>
+            </select>
+          </label>
+          <label class="check"><input id="integrity" type="checkbox" /> Integrity (NC2)</label>
+          <label class="check"><input id="autoWrap" type="checkbox" /> Auto mode: wrap output</label>
+        </div>
+      </header>
+
+      <section class="panes">
+        <article class="pane">
+          <div class="pane-head">
+            <h2>Input</h2>
+            <button id="clearInput" type="button">Clear</button>
+          </div>
+          <textarea id="input" placeholder="Type plain text, ENC[...] content, or a token..."></textarea>
+        </article>
+
+        <article class="pane">
+          <div class="pane-head">
+            <h2>Output</h2>
+            <button id="copyOutput" type="button">Copy</button>
+          </div>
+          <textarea id="output" readonly placeholder="Result appears here in real time..."></textarea>
+        </article>
+      </section>
+
+      <footer class="statusbar">
+        <span id="status">Ready</span>
+        <span id="detected">Detected: -</span>
+      </footer>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
