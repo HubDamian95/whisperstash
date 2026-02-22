@@ -1,11 +1,13 @@
 const statusEl = document.getElementById('status');
+const authTokenEl = document.getElementById('authToken');
 
 function setStatus(msg) {
   statusEl.textContent = msg;
 }
 
 document.getElementById('health').addEventListener('click', () => {
-  chrome.runtime.sendMessage({ type: 'health' }, (resp) => {
+  const authToken = authTokenEl.value.trim();
+  chrome.runtime.sendMessage({ type: 'health', authToken }, (resp) => {
     if (resp && resp.ok) {
       setStatus('Server reachable.');
     } else {
@@ -21,7 +23,8 @@ document.getElementById('decrypt').addEventListener('click', async () => {
     setStatus('No active tab.');
     return;
   }
-  chrome.tabs.sendMessage(tab.id, { type: 'decryptPage' }, (resp) => {
+  const authToken = authTokenEl.value.trim();
+  chrome.tabs.sendMessage(tab.id, { type: 'decryptPage', authToken }, (resp) => {
     if (chrome.runtime.lastError) {
       setStatus(`Tab error: ${chrome.runtime.lastError.message}`);
       return;

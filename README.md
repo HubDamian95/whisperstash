@@ -150,6 +150,12 @@ whisperstash server
 ```
 It prompts for your passphrase once and keeps it in memory until you stop it.
 
+Optional hardening with bearer token:
+```bash
+whisperstash server --auth-token "my-local-token"
+```
+Then enter the same token in the extension popup field.
+
 ## 3) Load Chrome extension
 1. Open `chrome://extensions`
 2. Enable `Developer mode`

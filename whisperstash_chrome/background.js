@@ -1,9 +1,17 @@
 const API = 'http://127.0.0.1:8765';
 
-async function post(path, payload) {
+function buildHeaders(authToken) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+  return headers;
+}
+
+async function post(path, payload, authToken) {
   const res = await fetch(`${API}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: buildHeaders(authToken),
     body: JSON.stringify(payload)
   });
   return await res.json();
@@ -13,20 +21,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
       if (msg.type === 'health') {
-        const res = await fetch(`${API}/health`);
+        const res = await fetch(`${API}/health`, { headers: buildHeaders(msg.authToken) });
         const data = await res.json();
         sendResponse(data);
         return;
       }
 
       if (msg.type === 'decryptToken') {
-        const data = await post('/decrypt', { token: msg.token });
+        const data = await post('/decrypt', { token: msg.token }, msg.authToken);
         sendResponse(data);
         return;
       }
 
       if (msg.type === 'unwrapText') {
-        const data = await post('/unwrap', { text: msg.text });
+        const data = await post('/unwrap', { text: msg.text }, msg.authToken);
         sendResponse(data);
         return;
       }

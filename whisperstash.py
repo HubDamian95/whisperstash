@@ -352,8 +352,16 @@ def cmd_edit(args: argparse.Namespace) -> int:
 
 def cmd_server(args: argparse.Namespace) -> int:
     key = read_key(args.key)
+    auth_token = args.auth_token if args.auth_token else os.environ.get("WHISPERSTASH_AUTH_TOKEN")
 
     class Handler(BaseHTTPRequestHandler):
+        def _is_authorized(self) -> bool:
+            if not auth_token:
+                return True
+            header = self.headers.get("Authorization", "")
+            expected = f"Bearer {auth_token}"
+            return hmac.compare_digest(header, expected)
+
         def _send_json(self, status: int, payload: dict) -> None:
             body = json.dumps(payload).encode("utf-8")
             self.send_response(status)
@@ -371,12 +379,18 @@ def cmd_server(args: argparse.Namespace) -> int:
             self._send_json(200, {"ok": True})
 
         def do_GET(self) -> None:
+            if not self._is_authorized():
+                self._send_json(401, {"ok": False, "error": "unauthorized"})
+                return
             if self.path == "/health":
                 self._send_json(200, {"ok": True, "service": "whisperstash", "version": "1"})
                 return
             self._send_json(404, {"ok": False, "error": "not found"})
 
         def do_POST(self) -> None:
+            if not self._is_authorized():
+                self._send_json(401, {"ok": False, "error": "unauthorized"})
+                return
             length = int(self.headers.get("Content-Length", "0"))
             raw = self.rfile.read(length) if length > 0 else b"{}"
             try:
@@ -759,6 +773,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host", default="127.0.0.1", help="Host bind address")
     p.add_argument("--port", type=int, default=8765, help="Port")
     p.add_argument("--key", help="Passphrase (avoid shell history)")
+    p.add_argument("--auth-token", help="Optional bearer token required by API clients")
     p.set_defaults(func=cmd_server)
 
     p = sub.add_parser("b64-to-enc", help="Decode base64 file and write encrypted .enc token file")
