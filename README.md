@@ -17,6 +17,8 @@ Local-first encryption toolkit with:
 
 No cloud backend. Your data stays on your machine.
 
+You can share your key with your friends and talk in "code". Fun huh? 
+
  > Run: `whisperstash ui` for the UI in your local browser:
 
 <img width="1267" height="760" alt="image" src="https://github.com/user-attachments/assets/07b51831-b2a1-43a9-a065-14ec3c3262ff" />
